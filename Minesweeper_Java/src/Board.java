@@ -8,7 +8,8 @@ import java.util.Random;
 public class Board {	
 	private int nRows;  // unnecessary
 	private int nCols;  // unnecessary
-	private int[][] board;  // change to Tiles
+	// private int[][] board;  // change to Tiles
+	private Tile[][] board;
 	
 	// For debugging
 	private static int[][] BOMB_GRID;
@@ -30,7 +31,8 @@ public class Board {
 	public Board(int nRows, int nCols, int[][] grid) {
 		this.nRows = nRows;
 		this.nCols = nCols;
-		this.board = new int[nRows][nCols];
+		// this.board = new int[nRows][nCols];
+		this.board = new Tile[nRows][nCols];
 		createBoardFromGrid(nRows, nCols, grid);
 	}
 	
@@ -45,7 +47,8 @@ public class Board {
 	public Board(int nRows, int nCols, int nBombs) {
 		this.nRows = nRows;
 		this.nCols = nCols;
-		this.board = new int[nRows][nCols];
+		// this.board = new int[nRows][nCols];
+		this.board = new Tile[nRows][nCols];
 		createRandomBoard(nRows, nCols, nBombs);
 	}
 	// ------------------------------- Methods -------------------------------
@@ -56,26 +59,29 @@ public class Board {
 	 * 				nCols: the number of columns, m
 	 * 				grid: a 2-d bit array of size n x m
 	 */
-	private int[][] createBoardFromGrid(int nRows, int nCols, int[][] grid) {
+	private Tile[][] createBoardFromGrid(int nRows, int nCols, int[][] grid) {
 		// *** Debugging ***
 		BOMB_GRID = grid;
 		
 		// Initialize board
 		initializeBoard(nRows, nCols);
+		
+		// Populate board with integers representing # neighboring bombs
 		for (int i = 0; i < nRows; i++) {
 			for (int j = 0; j < nCols; j++) {
+				// Create a new Tile to represent location (i, j)
 				if (grid[i][j] == 1) {
+					board[i][j].setIsBomb(true);
 					// Increment each neighbor bomb count
 					int rStart = i-1, rEnd = i+1, cStart = j-1, cEnd = j+1;
 					if (i == 0) { rStart++; }
 					if (i == nRows-1 ) { rEnd--; }
 					if (j == 0 ) { cStart++; }
 					if (j == nCols-1 ) { cEnd--; }
-					
 					for (int r = rStart; r <= rEnd; r++) {
 						for (int c = cStart; c <= cEnd; c++) {
 							if (r != i || c != j) {
-								board[r][c]++;
+								board[r][c].incrementNeighboringBombCount();
 							}
 						}
 					}
@@ -135,7 +141,7 @@ public class Board {
 	private void initializeBoard(int nRows, int nCols) {
 		for (int i = 0; i < this.nRows; i++) {
 			for (int j = 0; j < this.nCols; j++) {
-				this.board[i][j] = 0;
+				this.board[i][j] = new Tile();
 			}
 		}
 	}
@@ -149,7 +155,7 @@ public class Board {
 		System.out.println("\n ---------------- Game Board ------------------");
 		for (int i = 0; i < this.nRows; i++) {
 			for (int j = 0; j < this.nCols; j++) {
-				System.out.print(this.board[i][j] + " ");
+				System.out.print(this.board[i][j].getNeighboringBombCount() + " ");
 			}
 			System.out.println();
 		}

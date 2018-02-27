@@ -1,34 +1,58 @@
 package src;
 
+/* Author: John Lu
+ * 
+ * Description:
+ * 		This class represents a specific tile on the Minesweeper board.
+ */
+
 public class Tile {
 	// *** Change to private
-	public boolean bomb;
-	public boolean covered;
-	public int nNeighborBombs;
+	private boolean isBomb;
+	private boolean isCovered;
+	private boolean isFlagged;
+	private int nNeighborBombs;
 	
+	/* Description: Default Constructor creates a covered, unflagged tile
+	 * 				that is not a bomb.
+	 */
 	public Tile() {
-		this(false, true, 0);
-	}
-	
-	public Tile(boolean bomb, boolean covered, int nNeighborBombs) {
-		this.bomb = false;
-		this.covered = true;
+		this.isBomb = false;
+		this.isCovered = true;
+		this.isFlagged = false;
 		this.nNeighborBombs = 0;
 	}
 	
-	public void setBomb(boolean isBomb) {
-		this.bomb = isBomb;
+	// ------------------ Mutators / Accessors ----------------------
+	public void setIsBomb(boolean isBomb) {
+		this.isBomb = isBomb;
 	}
 	
 	public boolean isBomb() {
-		return this.bomb;
+		return this.isBomb;
 	}
 	
-	public void setCovered(boolean isCovered) {
-		this.covered = isCovered;
+	public void setIsCovered(boolean isCovered) {
+		this.isCovered = isCovered;
 	}
 	
 	public boolean isCovered() {
-		return this.covered;
+		return this.isCovered;
+	}
+	
+	public void setIsFlagged(boolean isFlagged) {
+		this.isFlagged = isFlagged;
+	}
+	
+	public boolean isFlagged() {
+		return this.isFlagged;
+	}
+	
+	public int getNeighboringBombCount() {
+		return this.nNeighborBombs;
+	}
+	
+	public void incrementNeighboringBombCount() {
+		this.nNeighborBombs++;
 	}
 }
