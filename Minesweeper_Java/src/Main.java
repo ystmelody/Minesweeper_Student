@@ -1,17 +1,17 @@
 package src;
 import java.io.*;
+import java.util.*;
 
 public class Main {
 	
 	public static void main(String[] args) {
-		
 		// --------------- For Development ------------------
 		final boolean DEBUG = true;
-		
-		final String VALID_OPTIONS = "f";   // List of all valid options
+		final String VALID_OPTIONS = "fm";   // List of all valid options
 		String options = "";   // To store user-inputed options
 		
 		if (DEBUG) {
+			// Runs Manual AI using sample text file
 			int nRows = -1; int nCols = -1;
 			int[][] grid = {};
 			try {
@@ -36,6 +36,7 @@ public class Main {
 					}
 
 				} catch (NumberFormatException e) {
+					
 				}
 				in.close();
 			} catch(FileNotFoundException e) {
@@ -44,8 +45,8 @@ public class Main {
 				// Print something useful
 			}
 			Board board = new Board(nRows, nCols, grid);
-			board.printBoard();
-			board.printBombGrid();
+			ManualAI ai = new ManualAI();
+			board.run(ai);
 			return;
 		}
 		
@@ -114,8 +115,8 @@ public class Main {
 		// If no file is provided, create a default random board
 		else  {
 			Board board = new Board();
-			board.printBoard();
-			board.printBombGrid();
+			ManualAI ai = new ManualAI();
+			board.run(ai);
 		}
 	}
 	

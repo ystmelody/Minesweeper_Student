@@ -6,14 +6,26 @@ import java.util.Random;
  */
 
 public class Board {	
-	private int nRows;  // unnecessary
-	private int nCols;  // unnecessary
+	private int nRows;
+	private int nCols;
 	// private int[][] board;  // change to Tiles
 	private Tile[][] board;
+	private int nBombs = 0;  // the # bombs this board has
+	private int nFlagsLeft;
 	
 	// For debugging
 	private static int[][] BOMB_GRID;
-
+	
+	// Tile inner class to represent board squares
+	private class Tile {
+		private boolean isBomb = false;
+		private boolean isCovered = true;
+		private boolean isFlagged = false;
+		private int nNeighborBombs = 0;
+	}
+	
+	private static final boolean DEBUG = true;
+	
     // ---------------------------- Constructors -----------------------------
 	// Description: Default constructor creates a random 10x10 board with 25 bombs
 	public Board() {
@@ -31,9 +43,10 @@ public class Board {
 	public Board(int nRows, int nCols, int[][] grid) {
 		this.nRows = nRows;
 		this.nCols = nCols;
-		// this.board = new int[nRows][nCols];
 		this.board = new Tile[nRows][nCols];
+		
 		createBoardFromGrid(nRows, nCols, grid);
+		this.nFlagsLeft = this.nBombs;
 	}
 	
 	/* Description:	This constructor takes the integer dimensions, n and m, of the board as input and
@@ -49,9 +62,112 @@ public class Board {
 		this.nCols = nCols;
 		// this.board = new int[nRows][nCols];
 		this.board = new Tile[nRows][nCols];
+		
 		createRandomBoard(nRows, nCols, nBombs);
+		this.nFlagsLeft = this.nBombs;
 	}
-	// ------------------------------- Methods -------------------------------
+	
+	// ========================== RUN LOOP ==============================
+	public void run(AI ai) {
+		Action actionObj;
+		boolean gameOver = false;
+		// Display fully covered board
+		this.printBoard();
+		System.out.println();
+		
+		// Loop until game is over.
+		while (!gameOver) {
+			System.out.println("------------------ Percepts ------------------ ");
+			System.out.println("Board Dim: " + nRows + " x " + nCols
+					+ "   Flags Left: " + nFlagsLeft);
+			System.out.println();
+			
+			// Ask agent for its action
+			actionObj = ai.getAction(this.nBombs, this.nFlagsLeft, this.nRows, this.nCols);
+			if (DEBUG) {
+				System.out.println(actionObj);
+			}
+			gameOver = this.performAction(actionObj);
+			this.printBoard();
+		}
+		
+		// ************* To Do: Calculate score here ************
+	}
+	
+	// returns true if game is over
+	private boolean performAction(Action actionObj) {
+		String action;
+		int x, y;
+		action = actionObj.getAction();
+		x = actionObj.getX();
+		y = actionObj.getY();
+		Tile tile = this.board[nRows-x][y-1];
+		switch (action) {
+			case "L":
+				System.out.println("Leaving World");
+				return true;  // quit game
+			case "U":
+				System.out.println("Uncover");
+				tile.isCovered = false;
+				if (tile.isBomb) {
+					this.uncoverAll();
+					return true;
+				}
+				break;
+			case "F":
+				System.out.println("Flagging/Unflagging");
+				// If already flagged, then unflag it
+				if (tile.isFlagged) {
+					tile.isFlagged = false;
+					this.nFlagsLeft++;
+				} else {
+					// If unflagged, then flag it
+					tile.isFlagged = true;
+					this.nFlagsLeft--;
+				}
+				break;
+		}
+		return false;
+	}
+	
+	/* 
+	 * Description: This method prints the current state of the board.
+	 * Inputs: 		None
+	 * Outputs		Prints the current state of the boad.
+	 */
+	public void printBoard() {
+		System.out.println("\n---------------- Game Board ------------------");
+		for (int i = 0; i < this.nRows; i++) {
+			for (int j = 0; j < this.nCols; j++) {
+				Tile tile = this.board[i][j];
+				if (tile.isCovered) {
+					if (tile.isFlagged) {
+						System.out.print("F ");
+					} else {
+						System.out.print(". ");
+					}
+				} else {
+					// Uncovered tile
+					if (tile.isBomb) {
+						System.out.print("* ");
+					} else {
+						System.out.print(tile.nNeighborBombs + " ");
+					}
+				}
+			}
+			System.out.println();
+		}
+	}
+	
+	private void uncoverAll() {
+		for (int i = 0; i < this.nRows; i++) {
+			for (int j = 0; j < this.nCols; j++) {
+				this.board[i][j].isCovered = false;
+			}
+		}
+	}
+	
+	// ---------------------- Board Generation Methods ------------------------
 	/* Description: This method creates an n x m dimensional board of integers
 	 * 				where entry i,j is the number of neighboring bombs.
 	 * 
@@ -60,7 +176,7 @@ public class Board {
 	 * 				grid: a 2-d bit array of size n x m
 	 */
 	private Tile[][] createBoardFromGrid(int nRows, int nCols, int[][] grid) {
-		// *** Debugging ***
+		// *** For Debugging ***
 		BOMB_GRID = grid;
 		
 		// Initialize board
@@ -71,7 +187,8 @@ public class Board {
 			for (int j = 0; j < nCols; j++) {
 				// Create a new Tile to represent location (i, j)
 				if (grid[i][j] == 1) {
-					board[i][j].setIsBomb(true);
+					board[i][j].isBomb = true;
+					this.nBombs++;
 					// Increment each neighbor bomb count
 					int rStart = i-1, rEnd = i+1, cStart = j-1, cEnd = j+1;
 					if (i == 0) { rStart++; }
@@ -81,7 +198,7 @@ public class Board {
 					for (int r = rStart; r <= rEnd; r++) {
 						for (int c = cStart; c <= cEnd; c++) {
 							if (r != i || c != j) {
-								board[r][c].incrementNeighboringBombCount();
+								board[r][c].nNeighborBombs++;
 							}
 						}
 					}
@@ -145,22 +262,7 @@ public class Board {
 			}
 		}
 	}
-	
-	/* 
-	 * Description: This method prints the current state of the board.
-	 * Inputs: 		None
-	 * Outputs		Prints the current state of the boad.
-	 */
-	public void printBoard() {
-		System.out.println("\n ---------------- Game Board ------------------");
-		for (int i = 0; i < this.nRows; i++) {
-			for (int j = 0; j < this.nCols; j++) {
-				System.out.print(this.board[i][j].getNeighboringBombCount() + " ");
-			}
-			System.out.println();
-		}
-	}
-	
+	// ----------------------- Debugging functions ---------------------------
 	public void printBombGrid() {
 		System.out.println("\n ---------------- Bomb Grid ------------------");
 		for (int i = 0; i < BOMB_GRID.length; i++) {

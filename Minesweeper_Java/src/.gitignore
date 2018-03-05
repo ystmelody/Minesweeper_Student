@@ -1,3 +1,12 @@
 /Main.class
 /Board.class
 /Tile.class
+/BoardClassTest.class
+/TileClassTest.class
+/Agent.class
+/Board$Tile.class
+/Agent$Action.class
+/AI$Action.class
+/AI.class
+/ManualAI.class
+/Action.class
