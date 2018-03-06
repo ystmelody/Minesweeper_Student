@@ -1,5 +1,7 @@
+from AI import AI
 
-class ManualAI():
+
+class ManualAI( AI ):
 	
 	class Action():
 
@@ -8,7 +10,7 @@ class ManualAI():
 			self.__x = x
 			self.__y = y
 
-		def getAction(self):
+		def getMove(self):
 			""" Allow private variable action to be publicly accessible """
 
 			return self.__action
@@ -24,7 +26,7 @@ class ManualAI():
 			return self.__y
 
 
-	def getMove(self):
+	def getAction(self):
 		""" Prompt user for type of action, and the coordinates of where to perform that action
 			Return an Action object storing that information
 		"""

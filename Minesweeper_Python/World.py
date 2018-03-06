@@ -51,8 +51,8 @@ class World():
 			self.__printBoard()
 
 			try: 
-				move = self.__agent.getMove()
-				action = move.getAction()
+				move = self.__agent.getAction()
+				action = move.getMove()
 				coordX = move.getX()
 				coordY = move.getY()
 
@@ -66,29 +66,40 @@ class World():
 			except IndexError:
 				print("Error: Move is out of bounds!")
 
-
+	###############################################
+	#				ACTIONS ON BOARD 			  #
+	###############################################
 	def __doMove(self, action, x, y):
 		""" Perform a move on the game board based on given action and x, y coords """
 
-			if action not in ["l", "u", "f"]:
-				raise ValueError
-			elif x < 0 or y < 0:
-				raise IndexError
-			else:
-				if action == "f":
+		if action not in ["l", "u", "f"]:
+			raise ValueError
+		elif x < 0 or y < 0:
+			raise IndexError
+		else:
+			if action == "f":
+				if not self.__board[x][y].flag:			# Flag tile if not yet flagged
 					self.__board[x][y].flag = True
-					self.__numFlags -= 1
-				elif action == "u":
-					if self.__board[x][y].mine == True:
-						self.__handleGameover()
-					else:
-						self.__score += 1
-						self.__board[x][y].covered = False
+					self.__numFlags -=1
+				else:									# Unflag tile if already flagged
+					self.__board[x][y].flag = False
+					self.__numFlags += 1
+
+				if self.__board[x][y].mine:		# If correctly flag a mine tile, score+1
+					self.__score += 1
+				else:									# If incorrectly flag a tile, score-1
+					self.__score -= 1
+			elif action == "u":
+				if self.__board[x][y].mine == True:		# If uncover a mine, trigger gameover
+					self.__handleGameover()
+				else:									# If uncover a regular tile, score+1
+					self.__score += 1
+					self.__board[x][y].covered = False
 
 
-#####################################################
-#			SETTING UP THE GAME BOARD   			#
-#####################################################
+	#####################################################
+	#			SETTING UP THE GAME BOARD   			#
+	#####################################################
 	def __addFeatures(self, open_file=None):
 		""" Add mines and numbers to tiles """
 
@@ -149,9 +160,9 @@ class World():
 		self.__board[y][x].covered = False
 
 
-#############################################
-#			 BOARD REPRESENTATION			#
-#############################################
+	#############################################
+	#			 BOARD REPRESENTATION			#
+	#############################################
 	def __printBoard(self):
 		""" Print board for debugging """
 
