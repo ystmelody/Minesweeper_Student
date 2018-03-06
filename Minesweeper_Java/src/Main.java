@@ -8,67 +8,24 @@ public class Main {
 	public static void main(String[] args) {
 		// --------------- For Development ------------------
 		final boolean DEBUG = true;
-		
+		String filename = null;
 		String options = parseOptions(args);   // To store user-inputed options
+		Board board = null;
+		if (options.contains("f")) {
+			// To Do: Error Check
+			filename = args[1];
+		}
+		
+		if (filename != null) {
+			board = createBoardFromFile(filename);
+		} else {
+			board = createBoardFromFile("./worlds/world6x8_1.txt");
+		}
 		
 		if (options.contains("m")) {
-			Board board = createBoardFromFile("./worlds/world6x8_1.txt");
 			ManualAI ai = new ManualAI();
 			board.run(ai);
 		}
-		/*
-		
-		// Read from file if option f was provided
-		if (options.contains("f")) {
-			int nRows = -1, nCols = -1;
-			int[][] grid = {};
-			String filename = "";
-			try {
-				filename = args[1];
-				BufferedReader in = new BufferedReader(new FileReader(filename));	
-				// First line is two integers that denote the number of rows and columns
-				String[] dims = in.readLine().split(" ");
-				try {
-					nRows = Integer.parseInt(dims[0]);
-					nCols = Integer.parseInt(dims[1]);
-					// text file has 2-d, space-delimited grid of 0's and 1's 
-					// indicating locations of bombs (1 for bomb).
-					grid = new int[nRows][nCols];
-					int row = 0;
-					String lineStr = in.readLine();
-					while (lineStr != null) {
-						String[] line = lineStr.split(" ");
-						for (int i = 0; i < line.length; i++) {
-							grid[row][i] = Integer.parseInt(line[i]);
-						}
-						row++;
-						lineStr = in.readLine();			
-					}
-
-				} catch (NumberFormatException e) {
-					System.out.println("World file " + filename + " has non-integer ");
-					System.exit(1);
-				}
-				in.close();
-			} catch(FileNotFoundException e) {
-				System.out.println("File " + filename + " not found");
-				System.exit(1);
-				
-			} catch(IOException e) {
-				// Print something useful
-			}		
-			// Create board that corresponds to text file
-			Board board = new Board(nRows, nCols, grid);
-			board.printBoard();
-			board.printBombGrid();
-		} 
-		// If no file is provided, create a default random board
-		else  {
-			Board board = new Board();
-			ManualAI ai = new ManualAI();
-			board.run(ai);
-		}
-		*/
 	}
 	
 	public static Board createBoardFromFile(String filename) {
