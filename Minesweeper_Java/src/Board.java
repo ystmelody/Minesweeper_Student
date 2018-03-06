@@ -67,6 +67,18 @@ public class Board {
 		this.nFlagsLeft = this.nBombs;
 	}
 	
+	private void uncoverAll() {
+		for (int i = 0; i < this.nRows; i++) {
+			for (int j = 0; j < this.nCols; j++) {
+				this.board[i][j].isCovered = false;
+			}
+		}
+	}
+	
+	public void uncover(int x, int y) {
+		this.board[nRows-y][x-1].isCovered = false;
+	}
+	
 	// ========================== RUN LOOP ==============================
 	public void run(AI ai) {
 		Action actionObj;
@@ -99,13 +111,15 @@ public class Board {
 		String action;
 		int x, y;
 		action = actionObj.getAction();
+		if (action.equals("L")) {
+			System.out.println("Leaving World");
+			this.uncoverAll();
+			return true;  // quit game
+		}
 		x = actionObj.getX();
 		y = actionObj.getY();
-		Tile tile = this.board[nRows-x][y-1];
+		Tile tile = this.board[nRows-y][x-1];
 		switch (action) {
-			case "L":
-				System.out.println("Leaving World");
-				return true;  // quit game
 			case "U":
 				System.out.println("Uncover");
 				tile.isCovered = false;
@@ -137,7 +151,9 @@ public class Board {
 	 */
 	public void printBoard() {
 		System.out.println("\n---------------- Game Board ------------------");
+		System.out.println();
 		for (int i = 0; i < this.nRows; i++) {
+			System.out.printf("%-2d",this.nRows-i);
 			for (int j = 0; j < this.nCols; j++) {
 				Tile tile = this.board[i][j];
 				if (tile.isCovered) {
@@ -157,15 +173,17 @@ public class Board {
 			}
 			System.out.println();
 		}
-	}
-	
-	private void uncoverAll() {
-		for (int i = 0; i < this.nRows; i++) {
-			for (int j = 0; j < this.nCols; j++) {
-				this.board[i][j].isCovered = false;
+		// Print Column Numbers
+		for (int i = 0; i < this.nCols+1; i++) {
+			if (i == 0) {
+				System.out.printf("  ");
+			} else {
+				System.out.printf("%-2d", i);
 			}
 		}
+		System.out.println();
 	}
+	// ======================= END RUN LOOP FUNCTIONS =========================
 	
 	// ---------------------- Board Generation Methods ------------------------
 	/* Description: This method creates an n x m dimensional board of integers
@@ -262,6 +280,9 @@ public class Board {
 			}
 		}
 	}
+	// -------------------- End Board Generation Methods ----------------------
+	
+	
 	// ----------------------- Debugging functions ---------------------------
 	public void printBombGrid() {
 		System.out.println("\n ---------------- Bomb Grid ------------------");
