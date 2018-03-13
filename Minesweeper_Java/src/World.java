@@ -200,35 +200,46 @@ public class World {
 	 * Outputs		Prints the current state of the boad.
 	 */
 	public void printBoard() {
+		String yAxisLabelFmt = "%-2d| ";
+		String xAxisLabelFmt = "%-4s";
+		String gridElemStrFmt = "%-4s";
+		String gridElemIntFmt = "%-4d";
 		System.out.println("\n---------------- Game Board ------------------");
 		System.out.println();
 		for (int i = 0; i < this.rowDimension; i++) {
-			System.out.printf("%-2d",this.rowDimension-i);
+			// Print Row Numbers
+			System.out.printf(yAxisLabelFmt,this.rowDimension-i);
 			for (int j = 0; j < this.colDimension; j++) {
 				Tile tile = this.board[i][j];
 				if (tile.covered) {
 					if (tile.flagged) {
-						System.out.print("F ");
+						System.out.printf(gridElemStrFmt, "F");
 					} else {
-						System.out.print(". ");
+						System.out.printf(gridElemStrFmt, ".");
 					}
 				} else {
 					// Uncovered tile
 					if (tile.mine) {
-						System.out.print("* ");
+						System.out.printf(gridElemStrFmt, "*");
 					} else {
-						System.out.print(tile.number + " ");
+						System.out.printf(gridElemIntFmt, tile.number);
 					}
 				}
 			}
 			System.out.println();
 		}
+		// Print Bottom Line Above Column Numbers
+		System.out.printf(xAxisLabelFmt, "");
+		for (int j = 0; j < this.colDimension; j++) {
+			System.out.printf(xAxisLabelFmt, "-");
+		}
+		System.out.println();
 		// Print Column Numbers
 		for (int i = 0; i < this.colDimension+1; i++) {
 			if (i == 0) {
-				System.out.printf("  ");
+				System.out.printf(xAxisLabelFmt, "");
 			} else {
-				System.out.printf("%-2d", i);
+				System.out.printf(xAxisLabelFmt, String.valueOf(i));
 			}
 		}
 		System.out.println();
