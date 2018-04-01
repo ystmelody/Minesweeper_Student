@@ -1,13 +1,12 @@
 package src;
-import java.io.*;
+
 import org.apache.commons.cli.*;
-import java.util.*;
 
 
 public class Main {
-	public static void main(String[] args) {
-		boolean MANUAL_AI = true;
-		boolean READ_FILE = true;
+	public static void main(String[] args) throws Exception {
+		String aiType = "myai";
+		boolean debug_mode = false;
 	
 		World world = null;
 		// ------------------------- Parse Options ---------------------------
@@ -24,6 +23,10 @@ public class Main {
         Option manualMode = new Option("m", "manual", false, "manual mode");
         manualMode.setRequired(false);
         options.addOption(manualMode);
+        
+        Option randomMode = new Option("r", "random", false, "random mode");
+        randomMode.setRequired(false);
+        options.addOption(randomMode);
         
         Option verbose = new Option("v", "verbose", false, "verbose mode");
         verbose.setRequired(false);
@@ -49,23 +52,30 @@ public class Main {
         	formatter.printHelp("Usage", options);
         	System.exit(0);
         }
-
+        
+        // Get option values
         String filename = cmd.getOptionValue("file");
-		// ------------------------ file input -------------------------
+        
+        // Random AI has priority over Manual AI if both flags are given
+        if (cmd.hasOption("random")) {
+        	aiType = "random";
+        } else if (cmd.hasOption("manual")) {
+        	aiType = "manual";
+        }
+        
+        if (cmd.hasOption("debug")) {
+        	debug_mode = true;
+        }
+        
+		// Create the world
 		if (filename != null) {
-			world = new World(filename);
+			world = new World(filename, aiType, debug_mode);
 		} else {
-			world = new World("./worlds/world6x8_1.txt");
+			System.out.print("file null");
+			world = new World(null, aiType, debug_mode);
 		}
 		
-		// ------------------------- AI Mode: ---------------------------
-		if (cmd.hasOption("m")) {
-			ManualAI ai = new ManualAI();
-			world.run(ai);
-		}
-		
-		// ----------------------- Verbose Mode: ------------------------
-		
-		// ------------------------ Debug Mode: -------------------------
+		// run
+		world.run();
 	}
 }

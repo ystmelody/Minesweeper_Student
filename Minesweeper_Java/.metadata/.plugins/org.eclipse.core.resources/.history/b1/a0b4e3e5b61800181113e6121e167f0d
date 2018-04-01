@@ -1,0 +1,136 @@
+package java_shell;
+import java.io.*;
+
+public class Main {
+
+	public static void main(String[] args) {
+		final String VALID_OPTIONS = "f";   // List of all valid options
+		String options = "";   // To store user-inputed options
+		
+		final boolean DEBUG = true;
+		
+		if (DEBUG) {
+			int nRows = -1; int nCols = -1;
+			int[][] grid = {};
+			try {
+				BufferedReader in = new BufferedReader(new FileReader("world6x8_1.txt"));	
+				// First line is two integers that denote the number of rows and columns
+				String[] dims = in.readLine().split(" ");
+				try {
+					nRows = Integer.parseInt(dims[0]);
+					nCols = Integer.parseInt(dims[1]);
+					// text file has 2-d, space-delimited grid of 0's and 1's 
+					// indicating locations of bombs (1 for bomb).
+					grid = new int[nRows][nCols];
+					int row = 0;
+					String lineStr = in.readLine();
+					while (lineStr != null) {
+						String[] line = lineStr.split(" ");
+						for (int i = 0; i < line.length; i++) {
+							grid[row][i] = Integer.parseInt(line[i]);
+						}
+						row++;
+						lineStr = in.readLine();			
+					}
+
+				} catch (NumberFormatException e) {
+				}
+				in.close();
+			} catch(FileNotFoundException e) {
+				
+			} catch(IOException e) {
+				// Print something useful
+			}
+			Board board = new Board(nRows, nCols, grid);
+			board.printBoard();
+			return;
+		}
+		
+		// If user arguments are provided, assume first one are options.
+		if (args.length != 0) {
+			if (args[0].charAt(0) == '-') {
+				String optString = args[0].substring(1, args[0].length());
+				for (int i = 0; i < optString.length(); i++) {
+					if (VALID_OPTIONS.contains(optString.substring(i,i+1))) {
+						options += optString.substring(i,i+1);
+					} else {
+						// Invalid option foundd
+						System.out.println("illegal option -- " + optString.charAt(i) );
+						System.out.println("usage: " + "[-" + VALID_OPTIONS + "]"
+								+ " [file...]");
+						System.exit(1);
+					}
+				}
+			}
+		}
+		
+		// Read from file if option f was provided
+		if (options.contains("f")) {
+			int nRows = -1, nCols = -1;
+			int[][] grid = {};
+			String filename = "";
+			try {
+				filename = args[1];
+				BufferedReader in = new BufferedReader(new FileReader(filename));	
+				// First line is two integers that denote the number of rows and columns
+				String[] dims = in.readLine().split(" ");
+				try {
+					nRows = Integer.parseInt(dims[0]);
+					nCols = Integer.parseInt(dims[1]);
+					// text file has 2-d, space-delimited grid of 0's and 1's 
+					// indicating locations of bombs (1 for bomb).
+					grid = new int[nRows][nCols];
+					int row = 0;
+					String lineStr = in.readLine();
+					while (lineStr != null) {
+						String[] line = lineStr.split(" ");
+						for (int i = 0; i < line.length; i++) {
+							grid[row][i] = Integer.parseInt(line[i]);
+						}
+						row++;
+						lineStr = in.readLine();			
+					}
+
+				} catch (NumberFormatException e) {
+					System.out.println("World file " + filename + " has non-integer ");
+					System.exit(1);
+				}
+				in.close();
+			} catch(FileNotFoundException e) {
+				System.out.println("File " + filename + " not found");
+				System.exit(1);
+				
+			} catch(IOException e) {
+				// Print something useful
+			}		
+			// Create board that corresponds to text file
+			Board board = new Board(nRows, nCols, grid);
+			board.printBoard();
+		} 
+		// If no file is provided, create a default random board
+		else  {
+			Board board = new Board();
+			board.printBoard();
+		}
+	}
+	
+	// For Debugging
+	public static void printArray(int[][] array) {
+		for (int i = 0; i < array.length; i++) {
+			for (int j = 0; j < array[i].length; j++) {
+				System.out.print(array[i][j]);
+			}
+			System.out.println();
+		}
+	}
+	
+	public static Board createBoardFromGrid(int nRows, int nCols, int[][] grid) {
+		return new Board(nRows, nCols, grid);
+	}
+	
+	public static Board createRandomBoard(int nRows, int nCols, int nBombs) {
+		// Initialize 2-D array board representation
+		return new Board(nRows, nCols, nBombs);
+		
+	}
+}

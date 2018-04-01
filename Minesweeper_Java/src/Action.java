@@ -1,27 +1,32 @@
 package src;
 
+
 public class Action {
-	// Description: TO DO
-	private String action;
-	private int x;
-	private int y;
+	public enum ACTION {
+		LEAVE, UNCOVER, FLAG, UNFLAG
+	};
 	
-	public String getAction() { return this.action; }
-	public int getX() { return this.x; }
-	public int getY() { return this.y; }
-	public Action(String action, int x, int y) {
+	public ACTION action;
+	public int x;
+	public int y;
+
+	public Action(ACTION action, int x, int y) {
 		this.action = action;
 		this.x = x;
 		this.y = y;
 	}
-	public Action(String action) {
-		this.action = action;
-		this.x = this.y = -1;
-	}
 	
+	public Action(ACTION action) {
+		this.action = action;
+		this.x = this.y = 1;
+	}
+
 	public String toString() {
-		String retString = "Action: " + this.action + "\n";
-		retString = retString + "x: " + this.x + " y: " + this.y;
+		String retString = this.action + " ";
+		if (this.action != ACTION.LEAVE) {
+			retString = retString + "(" + this.x + "," + this.y + ")";
+		}
 		return retString;
+		
 	}
 }

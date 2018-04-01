@@ -1,4 +1,4 @@
-all:
+compile:
 	javac -classpath ".:jars/*" src/*.java
 
 clean:

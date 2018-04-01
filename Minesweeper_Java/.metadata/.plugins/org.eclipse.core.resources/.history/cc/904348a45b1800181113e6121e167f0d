@@ -1,0 +1,136 @@
+package java_shell;
+import java.util.Random;
+
+/*	Author: John Lu
+ * 	Description: TO DO
+ */
+
+public class Board {
+	// *** Change to private
+	public int nRows;
+	public int nCols;
+	public int[][] board;  // change to Tiles
+
+    // ---------------------------- Constructors -----------------------------
+	// Description: Default constructor creates a random 10x10 board with 25 bombs
+	public Board() {
+		this(10, 10, 25);
+	}
+	
+	/* Description:	This constructor takes the dimensions, n and m, of the board as input and
+	 * 				a 2-d grid of of dimension n x m indicating bomb locations. grid[i][j] is
+	 * 				0 iff location (i,j) has no bomb and is 1 iff location (i,j) has a bomb.
+	 * 
+	 * Inputs:		nRows: the number of rows, n
+	 * 				nCols: the number of columns, m
+	 * 				grid: a 2-d boolean array of size n x m
+	 */
+	public Board(int nRows, int nCols, int[][] grid) {
+		this.nRows = nRows;
+		this.nCols = nCols;
+		this.board = createBoardFromGrid(nRows, nCols, grid);
+	}
+	
+	/* Description:	This constructor takes the integer dimensions, n and m, of the board as input and
+	 * 				a third integer indicating the number of bombs for the board. A board of size
+	 * 				n x m is created with the specified number of bombs placed randomly.
+	 * 
+	 * Inputs:		nRows: the number of rows, n
+	 * 				nCols: the number of columns, m
+	 * 				nBombs: the number of bombs to be randomly placed
+	 */
+	public Board(int nRows, int nCols, int nBombs) {
+		this.nRows = nRows;
+		this.nCols = nCols;
+		this.createRandomBoard(nRows, nCols, nBombs);
+	}
+	// ------------------------------- Methods -------------------------------
+	/* 
+	 * Description: This method creates an n x m dimensional board of integers
+	 * 				where entry i,j is the number of neighboring bombs.
+	 * 
+	 * Inputs:		nRows: the number of rows, n
+	 * 				nCols: the number of columns, m
+	 * 				grid: a 2-d bit array of size n x m
+	 */
+	private static int[][] createBoardFromGrid(int nRows, int nCols, int[][] grid) {
+		int[][] board = new int[nRows][nCols];
+		for (int i = 0; i < nRows; i++) {
+			for (int j = 0; j < nCols; j++) {
+				board[i][j] = 0;
+			}
+		}
+		for (int i = 0; i < nRows; i++) {
+			for (int j = 0; j < nCols; j++) {
+				if (grid[i][j] == 1) {
+					// Increment each neighbor bomb count
+					int rStart = i, rEnd = rStart+2, cStart = j, cEnd = cStart+2;
+					if (i == 0) { rStart++; }
+					if (i == nRows-1 ) { rEnd--; }
+					if (j == 0 ) { cStart++; }
+					if (j == nCols-1 ) { cEnd--; }
+					
+					for (int r = rStart; r < rEnd; r++) {
+						for (int c = cStart; c < cEnd; c++) {
+							if (r != i && c != j) {
+								board[r][c]++;
+							}
+						}
+					}
+				} else {
+					
+				}
+			}
+		}
+		return board;
+	}
+	
+	private static void countNeighborBombs(int i, int j, int[][] grid) {
+		
+	}
+	/* 
+	 * Description: This method creates an n x m dimensional board with the
+	 * 				specified number of bombs (bombs placed randomly)
+	 * 
+	 * Inputs:		nRows: the number of rows, n
+	 * 				nCols: the number of columns, m
+	 * 				nBombs: the number of bombs
+	 */
+	public void createRandomBoard(int nRows, int nCols, int nBombs) {
+		// Initialize board
+		this.board = new int[nRows][nCols];
+		for (int i = 0; i < this.nRows; i++) {
+			for (int j = 0; j < this.nCols; j++) {
+				this.board[i][j] = 0;
+			}
+		}
+		// Place bombs randomly
+		int bombsPlaced = 0;
+		Random rand = new Random();
+		while (bombsPlaced < nBombs) {
+			int r = rand.nextInt(nRows);
+			int c = rand.nextInt(nCols);
+			// If bomb already exists at location (r, c),
+			// then get another location
+			if (board[r][c] == 0) {
+				board[r][c] = 1;
+				bombsPlaced++;
+			}
+		}
+	}
+	
+	/* 
+	 * Description: This method prints the current state of the board.
+	 * Inputs: 		None
+	 * Outputs		Prints the current state of the boad.
+	 */
+	public void printBoard() {
+		for (int i = 0; i < this.nRows; i++) {
+			for (int j = 0; j < this.nCols; j++) {
+				System.out.print(this.board[i][j] + " ");
+			}
+			System.out.println();
+		}
+	}
+
+}

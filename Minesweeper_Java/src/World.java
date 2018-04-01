@@ -2,273 +2,473 @@ package src;
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
-import java.util.Random;
+import java.util.*;
+
+import src.Action.ACTION;
+
 
 /*	Author: John Lu
- * 	Description: TO DO
  */
 
 public class World {
-	// Variables about the game board
+	
+	// Defaults
+	static final int DEFAULT_COLS = 9;
+	static final int DEFAULT_ROWS = 9;
+	static final int DEFAULT_MINES = 10;
+	
+	// Game Constants
+	static final int WIN_BONUS = 100;
+	static final int LOSS_PENALTY = 100;
+	static final int CORRECT_FLAG_BONUS = 2;
+	static final int INCORRECT_FLAG_PENALTY = 2;
+	
+	// Board-related instance variables
 	private int rowDimension;
 	private int colDimension;
 	private Tile[][] board;
 	private int totalMines = 0;  // the # bombs this board has
+	private int perceptNumber = 0;
 
-	// Variables about the agent
+	// Agent-related instance variables
 	private AI agent;
 	private int score;
 	private int flagsLeft;
+	private int startX;
+	private int startY;
 	
-	// for faster score calculation and checking game end condition.
+	// Game Mode
+	private boolean debug;
+	
+	// For faster score calculation and checking game-terminating conditions.
 	private int coveredTiles;
+	private int correctFlags;
 	
-	// For debugging
-	private static int[][] BOMB_GRID;
 	
-	// Tile inner class to represent board squares
+	private enum GAMESTATE {
+		ACTIVE, WON, LOST
+	};
+	
+	private GAMESTATE gameState;
+	
+	// ------------------- Inner Class: Tile  --------------------
+	/* 	Description:
+	 * 	A Tile object represent a "square" on the game board.
+	 */
 	private class Tile {
-		private boolean mine = false;
-		private boolean covered = true;
-		private boolean flagged = false;
-		private int number = 0;
+		public boolean mine = false;
+		public boolean covered = true;
+		public boolean flagged = false;
+		public int number = 0;
 	}
 	
-	private static final boolean DEBUG = true;
-    // ---------------------------- Constructors -----------------------------	
-	public World(String filename) {
-		if (filename != null) {
-			this.createBoardFromFile(filename);
-		} else {
-			// Create some default world
-		}
-	}
-	
-	private void createBoardFromFile(String filename) {
-		int nRows = -1, nCols = -1, startX = -1, startY = -1;
-		String[] dims, startTile;
-		int[][] grid = {};
-		BufferedReader in = null;
-		try {
-			in = new BufferedReader(new FileReader(filename));	
-		}
-		catch(FileNotFoundException e) {
-			System.out.println("Invalid filename");
-			System.exit(1);
-		} 
-		catch(Exception e) {
-
-		}
-		// -------------------- Read in the Dimensions ------------------------
-		try {
-			dims = in.readLine().split(" ");
-			// Convert dimensions to integers
-			nRows = Integer.parseInt(dims[0]);
-			nCols = Integer.parseInt(dims[1]);
-		} catch (Exception e) {
-			System.out.println("Invalid Dimension Format found in file: " + filename);
-			System.out.println(e.getLocalizedMessage());
-			System.exit(1);
-		}
-		// -------------------- Read in the Starting Tile ------------------------
-		try {
-			startTile = in.readLine().split(" ");
-			// Get the starting tile coordinates
-			startX = Integer.parseInt(startTile[0]);
-			startY = Integer.parseInt(startTile[1]);
-			System.out.println("StartX: " + startX + " StartY: " + startY);
-		} catch (Exception e) {
-			System.out.println("Invalid Starting Square Format found in file: " + filename);
-			System.exit(1);
-		}
-		// ---------------------------- Read Bomb Grid ---------------------------
-		try {
-			grid = new int[nRows][nCols];
-			int row = 0;
-			String lineStr = in.readLine();
-			while (lineStr != null) {
-				String[] line = lineStr.split(" ");
-				for (int i = 0; i < line.length; i++) {
-					grid[row][i] = Integer.parseInt(line[i]);
-				}
-				row++;
-				lineStr = in.readLine();			
-			}	
-		} catch (Exception e) {
-			System.out.println("Invalid bomb grid format found in file: " + filename);
-		}
-		// --------------------------- Close Reader ------------------------------
-		try {
-			in.close();
-		} catch (Exception e) {
-			System.out.println(e.getMessage());
-			System.exit(1);
-		}
-		// ---------------------- Populate Instance Variables ----------------------
-		this.score = 0;
-		this.rowDimension = nRows;
-		this.colDimension = nCols;
-		this.board = new Tile[rowDimension][colDimension];
-		// Note: this method may be called only after board is instantiated.
-		// This method will set the totalMines and flagsLeft instance variables
-		this.createBoardFromGrid(nRows, nCols, grid);
+	// ---------------- Inner Class: TwoTuple  -------------------
+	/* 	Description:
+	 * 	A TwoTuple is a length-2 tuple of integers used to represent
+	 * 	an (x,y) coordinate or, alternatively, a (row, col) coordinate
+	 * 	of a Tile in the board.
+	 * 	
+	 * 	Additional Info:
+	 * 	The internal representation of a board is a 2-d array, 0-indexed 
+	 * 	array. However, users, specify locations on the board using 1-indexed
+	 * 	(x,y) Cartesian coordinates. 
+	 */
+	private class TwoTuple {
+		public int x;
+		public int y;
+		public TwoTuple(int x, int y) { this.x = x; this.y = y; }
 		
-		// Reveal the starting tile
-		this.uncover(startX, startY);
-	}
-		
-	private void uncoverAll() {
-		for (int i = 0; i < this.rowDimension; i++) {
-			for (int j = 0; j < this.colDimension; j++) {
-				this.board[i][j].covered = false;
-			}
+		public String toString() {
+			return "(" + x + "," + y + ")";
 		}
-	}
-	
-	private void uncover(int x, int y) {
-		this.board[rowDimension-y][x-1].covered = false;
 	}
 	
 	// ========================== RUN LOOP ==============================
-	public void run(AI ai) {
-		Action actionObj;
+	public void run() {
+		Action actionObj = null;
 		boolean gameOver = false;
-		// Display fully covered board
-		this.printBoard();
-		System.out.println();
 		
 		// Loop until game is over.
 		while (!gameOver) {
-			System.out.println("------------------ Percepts ------------------ ");
-			System.out.println("Board Dim: " + rowDimension + " x " + colDimension
-					+ "   Flags Left: " + flagsLeft);
-			System.out.println();
-			
-			// Ask agent for its action
-			actionObj = ai.getAction(this.totalMines, this.flagsLeft, this.rowDimension, this.colDimension);
-			if (DEBUG) {
-				System.out.println(actionObj);
+			if (this.debug || this.agent instanceof ManualAI) {
+				this.printBoardInfo();
+				this.printAgentInfo(actionObj);
 			}
-			gameOver = this.performAction(actionObj);
-			this.printBoard();
+			
+			if (this.agent instanceof ManualAI) {
+				this.printActionInfo();
+			}
+			// Ask agent for its action
+			actionObj = this.agent.getAction(this.perceptNumber);
+			
+			// Check the (x,y) coordinates are valid
+			if (!this.isInBounds(actionObj.x, actionObj.y)) {
+				System.out.println("out of bound coordinates: (" + actionObj.x + "," + actionObj.y + "). Exiting.");
+				System.exit(1);
+			};
+			
+			// If action is uncover a tile, then we will pass in the number on the tile
+			// as a percept next turn.
+			if (actionObj.action == ACTION.UNCOVER) {
+				Tile tile = this.getTile(actionObj.x, actionObj.y);
+				this.perceptNumber = tile.number;
+			} else {
+				this.perceptNumber = -1;
+			}
+
+			gameOver = this.doMove(actionObj);
+			this.score--;
+			if (this.debug) {
+				System.out.println("Hit any button to Continue...");
+				Scanner in = new Scanner(System.in);
+				in.nextLine();
+			}
+		}
+		if (this.gameState == GAMESTATE.WON) {
+			this.score += WIN_BONUS;
+		} else if (this.gameState == GAMESTATE.LOST) {
+			this.score -= LOSS_PENALTY;
+		}
+		calculateFinalScore();
+		this.uncoverAll();
+		this.printBoardInfo();
+		System.out.println("Final Action: " + actionObj);
+		System.out.println("Score: " + this.score);
+	}
+	
+	private Tile getTile(int x, int y) {
+		int row, col;
+		TwoTuple rc = this.translateCoordinate(x, y);
+		row = rc.x; col = rc.y;
+		Tile tile = this.board[row][col];
+		return tile;
+	}
+	
+	private void calculateFinalScore() {
+		int uncoveredTiles = this.rowDimension * this.colDimension - this.coveredTiles;
+		// +1 for each uncovered tile
+		this.score += uncoveredTiles;
+		
+		if (this.gameState == GAMESTATE.WON) {
+			this.score += WIN_BONUS;
+		} else if (this.gameState == GAMESTATE.LOST) {
+			this.score -= LOSS_PENALTY;
 		}
 		
-		// ************* To Do: Calculate score here ************
+		// Check for correctly placed flags
+		this.score += (this.correctFlags * CORRECT_FLAG_BONUS);
+		
+		// Check for incorrectly placed flags
+		int totalFlagsPlaced = this.totalMines - this.flagsLeft;
+		int incorrectFlags = totalFlagsPlaced - this.correctFlags;
+		this.score -= (incorrectFlags * INCORRECT_FLAG_PENALTY);
 	}
 	
 	// returns true if game is over
-	private boolean performAction(Action actionObj) {
-		String action;
-		int x, y;
-		action = actionObj.getAction();
-		if (action.equals("L")) {
-			System.out.println("Leaving World");
-			this.uncoverAll();
+	private boolean doMove(Action actionObj) {
+		int x, y, row, col;
+		Action.ACTION action = actionObj.action;
+		if (action == Action.ACTION.LEAVE) {
 			return true;  // quit game
 		}
-		x = actionObj.getX();
-		y = actionObj.getY();
-		Tile tile = this.board[rowDimension-y][x-1];
+		x = actionObj.x;
+		y = actionObj.y;
+		TwoTuple rc = this.translateCoordinate(x, y);
+		row = rc.x; col = rc.y;
+		Tile tile = this.board[row][col];
 		switch (action) {
-			case "U":
-				System.out.println("Uncover");
-				tile.covered = false;
+			case UNCOVER:
 				if (tile.mine) {
-					this.uncoverAll();
+					this.gameState = GAMESTATE.LOST;
 					return true;
-				}
-				break;
-			case "F":
-				System.out.println("Flagging/Unflagging");
-				// If already flagged, then unflag it
-				if (tile.flagged) {
-					tile.flagged = false;
-					this.flagsLeft++;
 				} else {
-					// If unflagged, then flag it
-					tile.flagged = true;
-					this.flagsLeft--;
+					this.uncoverTile(row, col);
+					// check if all tiles uncovered
+					if (this.coveredTiles - this.totalMines == 0) {
+						this.gameState = GAMESTATE.WON;
+						return true;
+					}	
 				}
 				break;
+			case FLAG:
+				if (this.flagsLeft > 0) {
+					// Do not decrement flag count if tile is already flagged.
+					if (!tile.flagged) {
+						this.flagsLeft--;
+						
+						// Check if the flag is on a bomb tile (used for scoring)
+						if (tile.mine) {
+							this.correctFlags++;
+						}
+					}
+					tile.flagged = true;
+				}
+				break;
+			case UNFLAG:
+				// Make sure to not exceed number of starting flags
+				if (this.flagsLeft < this.totalMines) {
+					// Do not increment flag count if there is no flag on the tile
+					if (tile.flagged) {
+						this.flagsLeft++;
+						
+						// Check if flag was on a mine tile (used for scoring)
+						if (tile.mine) {
+							this.correctFlags--;
+						}
+					}
+					tile.flagged = false;
+				}	
 		}
 		return false;
 	}
 	
-	/* 
-	 * Description: This method prints the current state of the board.
-	 * Inputs: 		None
-	 * Outputs		Prints the current state of the boad.
-	 */
-	public void printBoard() {
-		String yAxisLabelFmt = "%-2d| ";
-		String xAxisLabelFmt = "%-4s";
-		String gridElemStrFmt = "%-4s";
-		String gridElemIntFmt = "%-4d";
-		System.out.println("\n---------------- Game Board ------------------");
-		System.out.println();
-		for (int i = 0; i < this.rowDimension; i++) {
-			// Print Row Numbers
-			System.out.printf(yAxisLabelFmt,this.rowDimension-i);
-			for (int j = 0; j < this.colDimension; j++) {
-				Tile tile = this.board[i][j];
-				if (tile.covered) {
-					if (tile.flagged) {
-						System.out.printf(gridElemStrFmt, "F");
-					} else {
-						System.out.printf(gridElemStrFmt, ".");
-					}
-				} else {
-					// Uncovered tile
-					if (tile.mine) {
-						System.out.printf(gridElemStrFmt, "*");
-					} else {
-						System.out.printf(gridElemIntFmt, tile.number);
-					}
-				}
-			}
-			System.out.println();
+    // ---------------------------- Constructor -----------------------------	
+	public World(String filename, String aiType, boolean debug) throws Exception {
+		BufferedReader in;
+		TwoTuple mv;
+		int stX, stY, stRow, stCol;
+		
+		this.debug = debug;
+		
+		if (filename != null) {
+			in = new BufferedReader(new FileReader(filename));
+			
+			// Initialize 2-d array of Tile objects
+			createBoard(in);
+			
+			// Get the first move coordinates
+			mv = getFirstMove(in);
+			this.startX = mv.x;
+			this.startY = mv.y;
+			
+			// Add mines to board
+			addMines(in);
+			
+		} else {
+			// Create a default world - 9x9, 10 mines, random start tile
+			this.colDimension = DEFAULT_COLS;
+			this.rowDimension = DEFAULT_ROWS;
+			this.totalMines = this.flagsLeft = DEFAULT_MINES;
+			TwoTuple firstMv = getFirstMove();
+			this.startX = firstMv.x;
+			this.startY = firstMv.y;
+			createRandomBoard(this.startX,this.startY);
 		}
-		// Print Bottom Line Above Column Numbers
-		System.out.printf(xAxisLabelFmt, "");
-		for (int j = 0; j < this.colDimension; j++) {
-			System.out.printf(xAxisLabelFmt, "-");
-		}
-		System.out.println();
-		// Print Column Numbers
-		for (int i = 0; i < this.colDimension+1; i++) {
-			if (i == 0) {
-				System.out.printf(xAxisLabelFmt, "");
-			} else {
-				System.out.printf(xAxisLabelFmt, String.valueOf(i));
-			}
-		}
-		System.out.println();
+		
+		// Add tile numbers
+		addNumbers();
+		
+		// All tiles begin as covered
+		this.coveredTiles = this.rowDimension * this.colDimension;
+		
+		// Total flags available equals total number of mines
+		this.flagsLeft = this.totalMines;
+		
+		// Uncover the starting square
+		TwoTuple rowCol = this.translateCoordinate(this.startX, this.startY);
+		stRow = rowCol.x; 
+		stCol = rowCol.y;
+		this.uncoverTile(stRow, stCol);
+		
+		// Instantiate the proper AI class
+		this.agent = createAI(aiType);
+		
+		this.score = 0;
 	}
-	// ======================= END RUN LOOP FUNCTIONS =========================
 	
-	// ---------------------- Board Generation Methods ------------------------
-	/* Description: This method creates an n x m dimensional board of integers
-	 * 				where entry i,j is the number of neighboring bombs.
-	 * 
-	 * Inputs:		rowDimension: the number of rows, n
-	 * 				colDimension: the number of columns, m
-	 * 				grid: a 2-d bit array of size n x m
-	 */
-	private Tile[][] createBoardFromGrid(int rowDimension, int colDimension, int[][] grid) {
-		// *** For Debugging ***
-		BOMB_GRID = grid;
+	private AI createAI(String aiType) {
+		AI ai = null;
+		aiType = aiType.toUpperCase();
+		switch (aiType) {
+			case "MANUAL":
+				ai = new ManualAI();
+				break;
+			case "RANDOM":
+				ai = new RandomAI(this.rowDimension, this.colDimension, this.totalMines);
+				break;
+			case "MYAI":
+				ai = new MyAI(this.rowDimension, this.colDimension, this.totalMines, this.startX, this.startY);
+				break;
+			default:
+				ai = new ManualAI();
+		}
+		return ai;
+	}
+	
+	// ---------------------- World Generating Methods ------------------------
+	private void createBoard(BufferedReader in) throws Exception {
+		/*	Inputs:
+		 * 		in - BufferedReader reading the current world file
+		 * 
+		 * 	Description:
+		 * 	Reads in the board dimensions, row and column, from the 
+		 *  world file and initializes the "board" instance variable.
+		 */
+		String[] dims;
+		int nRows, nCols;
+		dims = in.readLine().split(" ");
+		// Convert dimensions to integers
+		nRows = Integer.parseInt(dims[0]);
+		nCols = Integer.parseInt(dims[1]);
 		
-		// Initialize board
-		initializeBoard(rowDimension, colDimension);
+		// Create an empty board of tiles
+		this.board = new Tile[nRows][nCols];
+		this.rowDimension = nRows;
+		this.colDimension = nCols;
 		
-		// Populate board with integers representing # neighboring bombs
+		// Initialize 2-d array of "empty" Tiles
+		this.initEmptyBoard();
+	}
+	
+	private void createRandomBoard(int stX, int stY) {
+		/*	Inputs:
+		 * 		stX - the starting x coordinate for this world. 
+		 * 		stY - the starting y coordinate for this world
+		 * 
+		 * 	Description:
+		 * 	Creates a default board with the given input coordinates
+		 * 	as the starting tile. Tiles that border the starting tile
+		 * 	are guaranteed to not be mines.
+		 *  
+		 *  Notes: 
+		 *  x,y coordinates are 1-indexed. That is,
+		 *  	1 <= x <= colDimension & 1 <= y <= rowDimension
+		 */
+		TwoTuple rowCol = this.translateCoordinate(stX, stY);
+		int stRow = rowCol.x;
+		int stCol = rowCol.y;
+		this.board = new Tile[this.rowDimension][this.colDimension];
+		this.initEmptyBoard();
+		
+		// Add Mines
+		int i = this.totalMines;
+		while (i > 0) {
+			int r = (int) (Math.random() * this.colDimension);
+			int c = (int) (Math.random() * this.rowDimension);
+			// Do not place mine adjacent to starting tile
+			if (Math.abs(r-stRow) > 1 || Math.abs(c-stCol) > 1) {
+				// place only if there isn't already a mine
+				if (!this.board[r][c].mine) {
+					this.addMine(r, c);
+					i--;
+				}
+			}	
+		}
+	}
+	
+	private void initEmptyBoard() {
+		/*	Description:
+		 * 	Initializes the 2-d "board" instance variable based
+		 * 	on current values of rowDimension and colDimension
+		 * 	instance variables.
+		 */
+		for (int i = 0; i < this.rowDimension; i++) {
+			for (int j = 0; j < this.colDimension; j++) {
+				this.board[i][j] = new Tile();
+			}
+		}	
+	}
+	
+	private TwoTuple getFirstMove(BufferedReader in) throws Exception {
+		/*	Inputs:
+		 * 		in - BufferedReader reading the current world file
+		 * 
+		 * 	Outputs
+		 * 		TwoTuple representing the x,y coordinate of the first move
+		 * 
+		 * 	Description:
+		 * 	Reads in the first move from the current world file and returns
+		 * 	the coordinates of the first move.
+		 * 
+		 *  Notes: 
+		 *  x,y coordinates are 1-indexed. That is,
+		 *  	1 <= x <= colDimension & 1 <= y <= rowDimension
+		 */
+		String[] startTile;
+		int startX, startY;
+		// Get the starting tile coordinates
+		startTile = in.readLine().split(" ");
+		startX = Integer.parseInt(startTile[0]);
+		startY = Integer.parseInt(startTile[1]);
+		return new TwoTuple(startX, startY);
+	}
+	
+	private TwoTuple getFirstMove() {
+		/*	Inputs: None
+		 * 
+		 * 	Outputs
+		 * 		TwoTuple representing the x,y coordinate of the first move
+		 * 
+		 * 	Description:
+		 * 	Randomly picks the starting x and y coordinates and returns the 
+		 * 	coordinates as a TwoTuple.
+		 * 
+		 *  Notes: 
+		 *  x,y coordinates are 1-indexed. That is,
+		 *  	1 <= x <= colDimension & 1 <= y <= rowDimension
+		 */
+		int stX, stY;
+		stX = (int) (Math.random() * this.colDimension) + 1;
+		stY = (int) (Math.random() * this.rowDimension) + 1;
+		return new TwoTuple(stX, stY);
+	}
+	
+	// ## Confirm with group
+	private void addMines(BufferedReader in) throws Exception {
+		/*	Inputs:
+		 * 		in - BufferedReader reading the current world file
+		 * 
+		 * 	Outputs: None
+		 * 
+		 * 	Description:
+		 * 	Reads in the 2-d mine grid from current world file and adds
+		 * 	each mine (represented by a "1" in the input file) to the board.
+		 */
+		int row, col;
+		int bomb;
+		String line = in.readLine();
+		
+		row = 0;
+		while (line != null) {
+			String[] bombs = line.split(" ");
+			if (bombs.length != this.colDimension) { /*throw exception*/ }
+			col = 0;
+			for (int i = 0; i < bombs.length; i++) {
+				 bomb = Integer.parseInt(bombs[i]);
+				 if (bomb == 1) {
+					 this.addMine(row, col);
+				 }
+				 col++;
+			}
+			row++;
+			line = in.readLine();	
+		}
+	}
+	
+	private void addMine(int row, int col) {
+		/*	Inputs:
+		 * 		row - 0-indexed row number in the board
+		 * 		col - 0-indexed col number in the board
+		 * 
+		 * 	Outputs: None
+		 * 
+		 * 	Description:
+		 * 	Adds mine to the given location of the board and increments
+		 * 	total mine count.
+		 */
+		this.board[row][col].mine = true;
+		this.totalMines++;
+	}
+
+	private void addNumbers() {	
+		/*  Description:
+		 * 	Sets the number displayed on each tile, which represents
+		 * 	the # of neighboring bombs.
+		 */
 		for (int i = 0; i < rowDimension; i++) {
 			for (int j = 0; j < colDimension; j++) {
-				// Create a new Tile to represent location (i, j)
-				if (grid[i][j] == 1) {
-					board[i][j].mine = true;
-					this.totalMines++;
-					// Increment each neighbor bomb count
+				if (this.board[i][j].mine) {
+					// Increment each neighbor's bomb count
 					int rStart = i-1, rEnd = i+1, cStart = j-1, cEnd = j+1;
 					if (i == 0) { rStart++; }
 					if (i == rowDimension-1 ) { rEnd--; }
@@ -277,82 +477,192 @@ public class World {
 					for (int r = rStart; r <= rEnd; r++) {
 						for (int c = cStart; c <= cEnd; c++) {
 							if (r != i || c != j) {
-								board[r][c].number++;
+								this.board[r][c].number++;
 							}
 						}
 					}
 				}
 			}
 		}
-		this.flagsLeft = this.totalMines;
-		return board;
 	}
 	
-	/* Description: This method creates an n x m dimensional board with the
-	 * 				specified number of bombs (bombs placed randomly)
-	 * 
-	 * Inputs:		rowDimension: the number of rows, n
-	 * 				colDimension: the number of columns, m
-	 * 				totalMines: the number of bombs
-	 */
-	private void createRandomBoard(int rowDimension, int colDimension, int totalMines) {
-		// Initialize board
-		initializeBoard(rowDimension, colDimension);
-		int[][] randBombGrid = placeBombs(rowDimension, colDimension, totalMines);
-		createBoardFromGrid(rowDimension, colDimension, randBombGrid);
-	}
-	
-	/* Description: This method returns a 2-d bit-array where a 1 on entry (i,j) 
-	 * 				indicates a bomb is present at (i,j) and 0 otherwise. Exactly
-	 * 				totalMines will be present at termination.
-	 * 
-	 * Inputs:		rowDimension: the number of rows, n
-	 * 				colDimension: the number of columns, m
-	 * 				totalMines: the number of bombs
-	 * 
-	 * Returns:		2-d bit-array.
-	 */
-	private int[][] placeBombs(int rowDimension, int colDimension, int totalMines) {
-		// Place bombs randomly
-		int[][] bombs = new int[rowDimension][colDimension];
-		int bombsPlaced = 0;
-		Random rand = new Random();
-		while (bombsPlaced < totalMines) {
-			int r = rand.nextInt(rowDimension);
-			int c = rand.nextInt(colDimension);
-			// If bomb already exists at location (r, c),
-			// then get another location
-			if (bombs[r][c] == 0) {
-				bombs[r][c] = 1;
-				bombsPlaced++;
-			}
+	private void uncoverTile(int row, int col) {
+		/*	Inputs:
+		 * 		row - 0-indexed row number in the board
+		 * 		col - 0-indexed col number in the board
+		 * 
+		 * 	Outputs: None
+		 * 
+		 * 	Description:
+		 * 	Uncovers given tile and decrements the count of covered tiles.
+		 * 	Also updates the "lastUncoveredTile" instance variable.
+		 */
+		Tile tile = this.board[row][col];
+		if (tile.covered) {
+			tile.covered = false;
+			this.coveredTiles--;
 		}
-		return bombs;
 	}
 	
-	/* Description: Initializes 2-d array to represent the game board.
-	 * 
-	 * Inputs:		rowDimension: the number of rows, n
-	 * 				colDimension: the number of columns, m
-	 */
-	private void initializeBoard(int rowDimension, int colDimension) {
+	private void uncoverAll() {
+		/*	Inputs: None
+		 * 
+		 * 	Outputs: None
+		 * 
+		 * 	Description:
+		 * 	Uncovers all tiles
+		 */
 		for (int i = 0; i < this.rowDimension; i++) {
 			for (int j = 0; j < this.colDimension; j++) {
-				this.board[i][j] = new Tile();
+				this.uncoverTile(i, j);
 			}
 		}
 	}
-	// -------------------- End Board Generation Methods ----------------------
 	
+	private TwoTuple translateCoordinate(int x, int y) {
+		/*	Inputs:
+		 * 		x - x coordinate of board
+		 * 		y - y coordinate of board 
+		 * 
+		 * 	Outputs:
+		 * 		TwoTuple, t, where:
+		 * 			t.x is the corresponding row index in the board
+		 * 			t.y is the corresponding col index in the board
+		 * 
+		 * 	Description:
+		 * 	Translates the given (x,y) coordinate to a (row, col) tuple used
+		 * 	for indexing into the board instance variable. (See Note below).
+		 * 
+		 * 	Notes:
+		 * 	The internal representation of a board is a 2-d array, 0-indexed 
+		 * 	array. However, users, specify locations on the board using 1-indexed
+		 * 	(x,y) Cartesian coordinates. 
+		 * 	Hence, to access the proper indicies the the board array, a translation 
+		 * 	must be performed first.
+		 */
+		int row = this.rowDimension-y;
+		int col = x-1;
+		return new TwoTuple(row, col);
+	}
+	// ------------------- End World Generating Methods ---------------------
 	
-	// ----------------------- Debugging functions ---------------------------
-	public void printBombGrid() {
-		System.out.println("\n ---------------- Bomb Grid ------------------");
-		for (int i = 0; i < BOMB_GRID.length; i++) {
-			for (int j = 0; j < BOMB_GRID[0].length; j++) {
-				System.out.print(BOMB_GRID[i][j] + " ");
+	// ---------------------- World Printing Methods ------------------------
+	public void printWorld() {
+		printBoardInfo();
+		printAgentInfo(null);
+		printActionInfo();
+	}
+	
+	public void printBoardInfo() {
+		String yAxisWidth = "4";
+		String xLeftOffset = "1";
+		String xElementSpacing = "2";
+		System.out.println("\n---------------- Game Board ------------------");
+		System.out.println();
+		for (int i = 0; i < this.rowDimension; i++) {
+			// Print Row Number
+			//System.out.print(this.rowDimension-i + "|");
+			System.out.printf("%"+yAxisWidth+"s", this.rowDimension-i+"|");
+			System.out.printf("%-"+xLeftOffset+"s", "");
+			for (int j = 0; j < this.colDimension; j++) {
+				printTileInfo(i, j);
+				System.out.printf("%-"+xElementSpacing+"s", "");
 			}
 			System.out.println();
 		}
+		// Print Bottom Line Above Column Numbers
+		System.out.printf("%"+yAxisWidth+"s", "");
+		System.out.printf("%"+xLeftOffset+"s", "");
+		for (int j = 0; j < this.colDimension; j++) {
+			System.out.print("-");
+			System.out.printf("%-"+xElementSpacing+"s", "");
+		}
+		System.out.println();
+		// Print Column Numbers
+		System.out.printf("%"+yAxisWidth+"s", "");
+		System.out.printf("%"+xLeftOffset+"s", "");
+		for (int i = 1; i < this.colDimension+1; i++) {
+			System.out.print(i);
+			System.out.printf("%-"+xElementSpacing+"s", "");
+		}
+		System.out.println();
+	}
+	
+	private void printTileInfo(int row, int col) {
+		Tile tile = this.board[row][col];
+		if (tile.covered) {
+			if (tile.flagged) {
+				System.out.print("F");
+			} else {
+				System.out.print(".");
+			}
+		} else {
+			// Uncovered tile
+			if (tile.mine) {
+				System.out.print("*");
+			} else {
+				System.out.print(tile.number);
+			}
+		}
+	}
+	
+	private void printAgentInfo(Action lastAction) {
+		System.out.println("------------------ Percepts ------------------ ");
+		System.out.print("Tiles Covered: " + this.coveredTiles + "   ");
+		System.out.print("Flags Left: " + this.flagsLeft + "   ");
+
+		// DELETE THIS
+		System.out.print("Correct Flags: " + this.correctFlags + "   ");
+		int incorrectFlags = this.totalMines - this.flagsLeft - this.correctFlags;
+		System.out.print("Incorrect Flags: " + incorrectFlags + "   ");
+
+		if (lastAction != null) {
+			System.out.print("Last Action: " + lastAction);
+		}
+		System.out.println();
+		System.out.println();
+	}
+	
+//	private void printAgentInfo() {
+//		if (this.agent instanceof ManualAI) {
+//			System.out.println("------------------ Percepts ------------------ ");
+//			System.out.print("Tiles Covered: " + this.coveredTiles + "   ");
+//			System.out.print("Flags Left: " + this.flagsLeft + "   ");
+//			
+//			System.out.print("Correct Flags: " + this.correctFlags + "   ");
+//			int incorrectFlags = this.totalMines - this.flagsLeft - this.correctFlags;
+//			System.out.print("Incorrect Flags: " + incorrectFlags + "   ");
+//			
+//			if (this.perceptNumber >= 0) {
+//				// System.out.print("Last Action: ");
+//				// System.out.print("Last uncovered Tile (number): " + this.lastUncoveredTile.number);
+//			}
+//			System.out.println();
+//			System.out.println();
+//		}
+//	}
+	
+	private void printActionInfo() {
+		System.out.println("---------------- Available Actions ----------------");
+		System.out.println("L: leave game   U: uncover tile   F: flag   N: unflag ");
+	}
+	
+	private boolean isInBounds(int x, int y) {
+		TwoTuple rowCol = this.translateCoordinate(x, y);
+		int row = rowCol.x;
+		int col = rowCol.y;
+		if (row < 0 || row >= this.rowDimension || 
+			col < 0 || col >= this.colDimension) {
+			return false;
+		}
+		return true;
+	}
+	// ---------------------- End World Printing Methods ----------------------
+	
+	public String toString() {
+		String ret = "";
+		ret = ret + "Dimensions: " + this.rowDimension + "x" + this.colDimension;
+		ret = ret + "Total Mines: " + this.totalMines;
+		return ret;
 	}
 }

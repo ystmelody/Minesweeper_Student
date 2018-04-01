@@ -12,3 +12,9 @@
 /Action.class
 /World$Tile.class
 /World.class
+/World$TwoTuple.class
+/World$GAMESTATE.class
+/AI$ACTION.class
+/Action$ACTION.class
+/MyAI.class
+/RandomAI.class
