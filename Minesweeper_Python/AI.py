@@ -1,11 +1,15 @@
 from abc import ABCMeta, abstractmethod
+from enum import Enum
 
 class AI:
 	__metaclass__ = ABCMeta
 
-	def __init__(self):
-		self.__VALID_ACTIONS = ["L", "U", "F"]
+	class Action (Enum):
+		LEAVE = 1
+		UNCOVER = 2
+		FLAG = 3
+		UNFLAG = 4
 		
 	@abstractmethod
-	def getAction(self):
+	def getAction(self, X, Y, coveredTiles, flagsLeft, lastUncoveredTile):
 		pass

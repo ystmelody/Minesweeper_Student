@@ -1,6 +1,11 @@
+# Written by: Justin Chung
+# CS-199
+
 import random
 
+import sys
 from ManualAI import ManualAI
+from AI import AI
 
 
 class World():
@@ -13,187 +18,274 @@ class World():
 		number = 0
 		
 
-	def __init__(self, manualAI=False, filename=None):
+	def __init__(self, filename=None, aiType=ManualAI(), verbose=False, debug=False):
+		self.__colDimension = 0
+		self.__rowDimension = 0
 		self.__score = 0
-		self.__numMines = 0
-		#self.__numFlags = 0
-		self.__gameover = False
-		self.__score = 0
+		self.__board = None
+		self.__totalMines = 0
+		self.__flagsLeft = 0
+		self.__coveredTiles = 0
+		self.__movesMade = 0
 
-		if manualAI:
-			self.__agent = ManualAI()
+		self.__lastUncoveredTile = None
 
-		# If file is provided
-		if filename != None:
-			with open(filename, 'r') as file:
-				self.__colDimension, self.__rowDimension = [int(x) for x in file.readline().split()]
-				self.__board = [[self.__Tile() for i in range(self.__rowDimension)] for j in range(self.__colDimension)]
-				self.__addFeatures(file)
-				self.__findFirst()
+		self.__ai = aiType
 
-		# If file not provided (default)
-		else:
-			self.__colDimension = 25		# Default sizes
-			self.__rowDimension = 25		# Default size
-			self.__totalMines = 99			# Default number of mines
+		try:
+		# If file is provided, construct board based on file
+			if filename != None:
+				with open(filename, 'r') as file:
+					self.__createBoard(file)
+					firstMoveCoords = self.__getFirstMove(file)
+					self.__addMines(file)
+					self.__addNumbers()
+					self.__coveredTiles = self.__colDimension * self.__rowDimension
+					self.__flagsLeft = self.__totalMines
+					self.__uncoverTile(firstMoveCoords[0]-1, firstMoveCoords[1]-1)
 
-			self.__board = [[self.__Tile() for i in range(self.__rowDimension)] for j in range(self.__colDimension)]
-			self.__addFeatures()
-			self.__findFirst()
+					
+		# If file not provided, construct board using defaults
+			else:
+				self.__createBoard()
+				self.__addMines()
+				self.__addNumbers()
+				firstMoveCoords = self.__getFirstMove()
+				self.__coveredTiles = self.__colDimension * self.__rowDimension
+				self.__flagsLeft = self.__totalMines
+				self.__uncoverTile(firstMoveCoords[0], firstMoveCoords[1])
 
-		self.__numFlags = self.__numMines
+		except ValueError:
+			print("Error: Cannot create board!")
 
 
 	def run(self):
 		""" Engine of the game """
-		
-		while (not self.__gameover):
-			self.__printBoard()
+		while (self.__coveredTiles != self.__totalMines):
+			self.__printWorld()
 
 			try: 
-				move = self.__agent.getAction()
-				action = move.getMove()
-				coordX = move.getX()
-				coordY = move.getY()
-
-				if action == "l":
-					self.__handleGameover()
-					break
-				self.__doMove(action, coordX, coordY)
-				
-			except ValueError as error:
+				action = self.__ai.getAction(self.__colDimension, self.__rowDimension, self.__coveredTiles, self.__flagsLeft, self.__lastUncoveredTile)
+				if self.__checkValidAction(action):
+					if self.__doMove(action):
+						break
+			except ValueError:
 				print("Error: Invalid action!")
 			except IndexError:
 				print("Error: Move is out of bounds!")
+		self.__handleGameover()
+		self.__uncoverAll()
+		self.__printWorld()
+		return self.__score
+
 
 	###############################################
 	#				ACTIONS ON BOARD 			  #
 	###############################################
-	def __doMove(self, action, x, y):
-		""" Perform a move on the game board based on given action and x, y coords """
-
-		if action not in ["l", "u", "f"]:
-			raise ValueError
-		elif x < 0 or y < 0:
+	def __checkValidAction(self, actionObj):
+		""" Check if move is valid, and if coordinates are valid, returning a boolean """
+		move = actionObj.getMove()
+		X = actionObj.getX()
+		Y = actionObj.getY()
+		if move in [AI.Action.LEAVE, AI.Action.UNCOVER, AI.Action.FLAG, AI.Action.UNFLAG]:
+			if self.__isInBounds(X, Y):
+				return True
 			raise IndexError
-		else:
-			if action == "f":
-				if not self.__board[x][y].flag:			# Flag tile if not yet flagged
-					self.__board[x][y].flag = True
-					self.__numFlags -=1
-				else:									# Unflag tile if already flagged
-					self.__board[x][y].flag = False
-					self.__numFlags += 1
+		raise ValueError
 
-				if self.__board[x][y].mine:		# If correctly flag a mine tile, score+1
-					self.__score += 1
-				else:									# If incorrectly flag a tile, score-1
-					self.__score -= 1
-			elif action == "u":
-				if self.__board[x][y].mine == True:		# If uncover a mine, trigger gameover
-					self.__handleGameover()
-				else:									# If uncover a regular tile, score+1
-					self.__score += 1
-					self.__board[x][y].covered = False
+
+	def __doMove(self, actionObj):
+		""" Perform a move on the game board based on given action and x, y coords """
+		#self.__score -= 1
+		self.__movesMade += 1
+
+		move = actionObj.getMove()
+		X = actionObj.getX()
+		Y = actionObj.getY()
+
+		if move == AI.Action.LEAVE:
+			print("Leaving game...")
+			return True 					# Returning True means game over
+		elif move == AI.Action.UNCOVER:
+			if self.__board[X][Y].mine:
+				print("Gameover! Uncovered a bomb!")
+				return True
+			self.__uncoverTile(X, Y)
+		elif move == AI.Action.FLAG:
+			self.__flagTile(X, Y)
+		elif move == AI.Action.UNFLAG:
+			self.__unflagTile(X, Y)
+		return False
 
 
 	#####################################################
 	#			SETTING UP THE GAME BOARD   			#
 	#####################################################
-	def __addFeatures(self, open_file=None):
-		""" Add mines and numbers to tiles """
+	def __createBoard(self, inputStream=None):
+		""" Creates 2D tile array from first line of file and instantiates board instance variable """
+		if inputStream:
+			self.__colDimension, self.__rowDimension = [int(x) for x in inputStream.readline().split()]
+			self.__board = [[self.__Tile() for i in range(self.__rowDimension)] for j in range(self.__colDimension)]
+		else:
+			self.__colDimension = 9		# Default sizes
+			self.__rowDimension = 9		# Default size
+			#self.__totalMines = 10		# Default number of mines
 
-		# If no file is provided (default)
-		if open_file == None:
+			self.__board = [[self.__Tile() for i in range(self.__rowDimension)] for j in range(self.__colDimension)]
+
+
+	def __getFirstMove(self, inputStream=None): 
+		""" Find the first move to be given to the agent, must be a "0" tile """
+		if inputStream:
+			startX, startY = [int(x) for x in inputStream.readline().split()]
+			if startX > self.__colDimension or startX < 1 or startY > self.__rowDimension or startY < 1:
+				raise ValueError('First move coordinates are invalid')
+		else:
+			startX = self.__randomInt(self.__colDimension)
+			startY = self.__randomInt(self.__rowDimension)
+			while (self.__board[startY][startX].number != 0 or self.__board[startY][startX].mine):
+			#while (not self.__checkNeighboringTiles(startY, startX)):
+				startX = self.__randomInt(self.__colDimension)
+				startY = self.__randomInt(self.__rowDimension)
+		#print(startX, startY)
+		return (startY, startX)
+
+
+	def __checkNeighboringTiles(self, c, r):
+		""" Checks the neighboring tiles of c, r to see if there are any mines """
+		""" Return the True if there are no neighboring mines, indicating a valid first move """
+		print("checking")
+		if self.__hasMine(c, r+1) or self.__hasMine(c, r-1) or self.__hasMine(c+1, r) or self.__hasMine(c-1,r) or self.__hasMine(c-1, r+1) or self.__hasMine(c+1, r+1) or self.__hasMine(c-1, r-1) or self.__hasMine(c+1, r-1):
+			print "false"
+			return False
+		print "true"
+		return True
+
+
+	def __hasMine(self, c, r):
+		""" Checks if tile has a mine """
+		print("checking", c+1, r+1)
+		if self.__isInBounds(c, r):
+			if self.__board[c][r].mine:
+				print("Mine here: ", c, r)
+			return self.__board[c][r].mine
+
+
+	def __addMines(self, inputStream=None):
+		""" Add mines to the game board""" 
+		if inputStream:
+			for r, line in zip(range(self.__rowDimension - 1, -1, -1), inputStream.readlines()):
+				for c, tile in zip(range(self.__colDimension), line.split()):
+					if tile == "1":
+						self.__addMine(c, r)
+		else:
 			currentMines = 0
-			while currentMines < self.__totalMines:
+			while currentMines < 10:	# Default number of mines is 10
 				r = self.__randomInt(self.__rowDimension)
 				c = self.__randomInt(self.__colDimension)
 				if not self.__board[c][r].mine:
 					self.__addMine(c, r)
 					currentMines += 1
 
-		# If file is provided
-		else:
-			for r, line in zip(range(self.__rowDimension - 1, -1, -1), open_file.readlines()):
-				for c, tile in zip(range(self.__colDimension), line.split()):
-					if tile == "1":
-						self.__addMine(c, r)
-
-
+					
 	def __addMine(self, c, r):
-		""" Add mine to tile located at c, r """
-
-		# Set attributes
+		""" Add mine to tile located at (c, r) and update the Tile.mine attrbute """
 		self.__board[c][r].mine = True
-		self.__numMines += 1		
+		self.__totalMines += 1		
 
-		# Increment number values according to mines
-		self.__addHintNumber(c, r+1)
-		self.__addHintNumber(c, r-1)
-		self.__addHintNumber(c+1, r)
-		self.__addHintNumber(c-1, r)
-		self.__addHintNumber(c-1, r+1)
-		self.__addHintNumber(c+1, r+1)
-		self.__addHintNumber(c-1, r-1)
-		self.__addHintNumber(c+1, r-1)
+
+	def __addNumbers(self):
+		""" Iterate the board and add hint numbers for each mine """
+		for r in range(self.__rowDimension):
+			for c in range(self.__colDimension):
+				if self.__board[c][r].mine:
+					self.__addHintNumber(c, r+1)
+					self.__addHintNumber(c, r-1)
+					self.__addHintNumber(c+1, r)
+					self.__addHintNumber(c-1, r)
+					self.__addHintNumber(c-1, r+1)
+					self.__addHintNumber(c+1, r+1)
+					self.__addHintNumber(c-1, r-1)
+					self.__addHintNumber(c+1, r-1)
 
 
 	def __addHintNumber(self, c, r):
-		""" Makes sure tile is in bounds before updating the number value
-			Avoids out of bounds IndexError
-		"""
-
-		if c < self.__colDimension and c >= 0 and r < self.__rowDimension and r >= 0:
+		""" Increment the hint number of a tile """
+		if self.__isInBounds(c, r):
 			self.__board[c][r].number += 1
 
 
-	def __findFirst(self):
-		""" Finds random tile with number 0 and gives it to the player """
+	def __uncoverTile(self, c, r):
+		""" Uncovers a tile """
+		if self.__board[c][r].covered:
+			self.__coveredTiles -= 1
+			self.__board[c][r].covered = False
+			self.__lastUncoveredTile = (c+1, r+1)
 
-		x = self.__randomInt(self.__colDimension)
-		y = self.__randomInt(self.__rowDimension)
-		while (self.__board[y][x].number != 0):
-			x = self.__randomInt(self.__colDimension)
-			y = self.__randomInt(self.__rowDimension)
-		self.__board[y][x].number = 0
-		self.__board[y][x].covered = False
+
+	def __uncoverAll(self):
+		""" Uncovers all tiles """
+		for r in range(self.__rowDimension):
+			for c in range(self.__colDimension):
+				self.__uncoverTile(c, r)
+		self.__coveredTiles = 0
+		#self.__lastUncoveredTile = None
+
+
+	def __flagTile(self, c, r):
+		""" Flag a tile, coordinates adjusted to fix indexing """
+		if self.__board[c][r].covered:
+			if not self.__board[c][r].flag:
+				self.__board[c][r].flag = True
+				self.__flagsLeft -= 1
+
+
+	def __unflagTile(self, c, r):
+		""" Unflag a tile, coordinates adjusted to fix indexing """
+		if self.__board[c][r].covered:
+			if self.__board[c][r].flag:
+				self.__board[c][r].flag = False
+				self.__flagsLeft +=1
+
+
+	def __handleGameover(self):
+		for r in range(self.__rowDimension):
+			for c in range(self.__colDimension):
+				if not self.__board[c][r].covered and not self.__board[c][r].mine:
+					print "hi"
+					self.__score += 1
+				if self.__board[c][r].flag and self.__board[c][r].mine and self.__board[c][r].covered:
+					self.__score += 2
+				if self.__board[c][r].flag and not self.__board[c][r].mine and self.__board[c][r].covered:
+					self.__score -= 2
+		self.__score -= self.__movesMade
 
 
 	#############################################
 	#			 BOARD REPRESENTATION			#
 	#############################################
-	def __printBoard(self):
-		""" Print board for debugging """
+	def __printWorld(self):
+		self.__printBoardInfo()
+		self.__printActionInfo()
+		self.__printAgentInfo()
 
-		print("\nNumber of mines: " + str(self.__numMines))
-		print("Number of flags left: " + str(self.__numFlags))
+
+	def __printBoardInfo(self):
+		""" Print board for debugging """
+		print("\nNumber of mines: " + str(self.__totalMines))
+		print("Number of flags left: " + str(self.__flagsLeft))
 
 		board_as_string = ""
 		for r in range(self.__rowDimension - 1, -1, -1):
-			board_as_string += str(r).ljust(2) + "|"
+			print str(r+1).ljust(2) + '|',
 			for c in range(self.__colDimension):
-				if not self.__board[c][r].covered:
-					board_as_string += " " + str(self.__board[c][r].number) + " "
-				elif self.__board[c][r].flag:
-					board_as_string += " ? "
-				elif self.__board[c][r].covered:
-					board_as_string += " . "
-				
-				
-				"""
-				# Used for debugging
-				if self.__board[c][r].mine:
-					board_as_string += " B "
-				else:
-					board_as_string += " " + str(self.__board[c][r].number) + " "
-				"""
+				self.__printTileInfo(c, r)
 			if (r != 0):
-				board_as_string += "\n"
+				print '\n',
 
-		column_label = "   "
+		column_label = "    "
 		column_border = "   "
-		for c in range(self.__colDimension):
+		for c in range(1, self.__colDimension+1):
 			column_border += "---"
 			column_label += str(c).ljust(3)
 		print(board_as_string)
@@ -201,20 +293,27 @@ class World():
 		print(column_label)
 
 
-	def __handleGameover(self):
-		""" When a mine is uncovered, end the game and reveal the entire board """
-		
-		print("Gameover!")
+	def __printAgentInfo(self):
+		""" Prints information about the board that are useful to the user """
+		print("Tiles covered: " + str(self.__coveredTiles) + " | Flags left: " + str(self.__flagsLeft) + " | Last uncovered tile (number): " + str(self.__lastUncoveredTile))
 
-		for r in range(self.__rowDimension - 1, -1, -1):
-			for c in range(self.__colDimension):
-				if self.__board[c][r].mine:
-					self.__board[c][r].number = "B"
-				self.__board[c][r].covered = False
 
-		self.__gameover = True
-		self.__printBoard()
-		print("Score: " + str(self.__score))
+	def __printActionInfo(self):
+		""" Prints available actions to the user if agent is ManualAU """
+		if type(self.__ai) == ManualAI:
+			print("Press \"L\" to leave game\nPress \"U\" to uncover a tile\nPress \"F\" to flag a tile\nPress \"N\" to unflag a tile: ")
+
+
+	def __printTileInfo(self, c, r):
+		""" Checks tile attributes and prints accordingly """
+		if self.__board[c][r].flag:
+			print '? ',
+		elif not self.__board[c][r].covered and self.__board[c][r].mine:
+			print 'B ',
+		elif self.__board[c][r].covered:
+			print '. ',
+		else:
+			print str(self.__board[c][r].number) + ' ',
 		
 
 	#####################################################
@@ -222,10 +321,12 @@ class World():
 	#####################################################
 	def __randomInt(self, limit):
 		""" Return a random int within the range from 0 to limit """
-
 		return random.randrange(limit)
 
-if __name__ == "__main__":
-	#world1 = World(manualAI=True, filename="test_world.txt")
-	world2 = World(manualAI=True)
-	world2.run()
+
+	def __isInBounds(self, c, r):
+		""" Returns true if given coordinates are within the boundaries of the game board """
+		if c < self.__colDimension and c >= 0 and r < self.__rowDimension and r >= 0:
+			return True
+		return False
+
