@@ -2,6 +2,7 @@ package src;
 import src.Action.ACTION;
 import java.util.LinkedList;
 import java.util.HashMap;
+import java.util.HashSet;
 
 public class MyAI extends AI {
 	// ########################## INSTRUCTIONS ##########################
@@ -35,7 +36,6 @@ public class MyAI extends AI {
 	
 	// Buffers
 	private LinkedList<Action> moveQ;
-	private LinkedList<Integer> numberQ;
 	
 	
 	// Coordinate Class
@@ -46,11 +46,16 @@ public class MyAI extends AI {
 		public String toString() {
 			return "(" + this.x + "," + this.y + ")";
 		}
+		public boolean equals(Object other) {
+			Coordinate otherCoord = (Coordinate) other;
+			return this.x == otherCoord.x && this.y == otherCoord.y;
+		}
 	}
 	
 	// DELETE
 	private int moveNumber = 0;
 	
+	@SuppressWarnings("unchecked")
 	public MyAI(int rowDimension, int colDimension, int totalMines, int startX, int startY) {
 		this.ROW_DIMENSION = rowDimension;
 		this.COL_DIMENSION = colDimension;
@@ -65,20 +70,16 @@ public class MyAI extends AI {
 		initBombBoard();
 		
 		this.prevAction = new Action(ACTION.UNCOVER, START_X, START_Y);
-		this.doAction(this.prevAction);
+		this.doAction(this.prevAction, this.boardInfo, this.bombInfo);
 		this.moveQ = new LinkedList<Action>();
-		this.numberQ = new LinkedList<Integer>();
 	}
 	
 	// ### Implement getAction() ###
 	public Action getAction(int number) {
 		this.moveNumber++;
-//		System.out.println("Dimension: " + this.ROW_DIMENSION + " x " + this.COL_DIMENSION);
-		System.out.println("Flags Left: " + this.flagsLeft);
-//		System.out.println("StartX: " + this.START_X);
-//		System.out.println("StartY: " + this.START_Y);
-		System.out.println("Number of Last Tile (From MYAI): " + number);
-		System.out.println("Move #: " + this.moveNumber);
+		//System.out.println("Flags Left: " + this.flagsLeft);
+		//System.out.println("Number of Last Tile (From MYAI): " + number);
+		//System.out.println("Move #: " + this.moveNumber);
 		
 		if (prevAction.action == ACTION.UNCOVER) {
 			this.boardInfo[prevAction.y][prevAction.x].put("number", number);
@@ -90,22 +91,22 @@ public class MyAI extends AI {
 		
 		Action nextAction = getNextMove();
 		this.prevAction = nextAction;
-		this.doAction(nextAction);
+		this.doAction(nextAction, this.boardInfo, this.bombInfo);
 		return nextAction;
 	}
 	
-	private void doAction(Action a) {
+	private void doAction(Action a, HashMap<String, Integer>[][] boardInfo, BOMB_INFO[][] bombInfo) {
 		/*
 		 * Make the necessary updates to state after doing an action
 		 */
-		System.out.println("Doing action...");
-		System.out.println(a);
+		// System.out.println("Doing action...");
+		// System.out.println(a);
 		LinkedList<Coordinate> allNeighbors = getAllNeighbors(a.x, a.y);
 		if (a.action == ACTION.UNCOVER) {
-			this.bombInfo[a.y][a.x] = BOMB_INFO.NOBOMB;	
+			bombInfo[a.y][a.x] = BOMB_INFO.NOBOMB;	
 			// Update neighbors' information.
 			for (Coordinate nb : allNeighbors) {
-				HashMap<String, Integer> tile = this.boardInfo[nb.y][nb.x];
+				HashMap<String, Integer> tile = boardInfo[nb.y][nb.x];
 				//System.out.print("Before: " + tile.get("covered_neighbors"));
 				tile.put("covered_neighbors", tile.get("covered_neighbors")-1);
 				//System.out.print("After: " + tile.get("covered_neighbors"));
@@ -113,15 +114,11 @@ public class MyAI extends AI {
 		} else if (a.action == ACTION.FLAG) {
 			// Flagging occurs when a bomb has been found. Update neighbors'
 			// bomb_neighbors info.
-			this.bombInfo[a.y][a.x] = BOMB_INFO.BOMB;
+			bombInfo[a.y][a.x] = BOMB_INFO.BOMB;
 			for (Coordinate nb : allNeighbors) {
-				HashMap<String, Integer> tile = this.boardInfo[nb.y][nb.x];
-				//System.out.println(nb);
-				//System.out.println("Before (bomb neigh): " + tile.get("bomb_neighbors"));
+				HashMap<String, Integer> tile = boardInfo[nb.y][nb.x];
 				tile.put("bomb_neighbors", tile.get("bomb_neighbors")+1);
-				//System.out.println("After: (bomb neigh)" + tile.get("bomb_neighbors"));
-			}
-			
+			}	
 		} else if (a.action == ACTION.UNFLAG) {
 			// Should never happen
 		}
@@ -132,40 +129,148 @@ public class MyAI extends AI {
 		if (!moveQ.isEmpty()) {
 			return moveQ.removeFirst();
 		}
+		
 		// Update bombInfo
-		flagBombsFromCounts();
+		this.flagBombsFromCounts(this.boardInfo, this.bombInfo);
 		if (!moveQ.isEmpty()) {
 			return moveQ.removeFirst();
 		}
 		
 		// Determine safe moves from "counts"
-		findSafeTilesFromCounts();
+		this.uncoverSafeTiles(this.boardInfo, this.bombInfo);
 		if (!moveQ.isEmpty()) {
 			return moveQ.removeFirst();
 		}
 		
 		// Run backtracking
+		// System.out.println("### Finding Contradiction ###");
+		for (int y = 1; y < this.boardInfo.length; y++) {
+			for (int x = 1; x < this.boardInfo[0].length; x++) {
+				HashMap<String, Integer> tile = this.boardInfo[y][x];
+				if (tile.get("number") == -1 && this.bombInfo[y][x] == BOMB_INFO.UNKNOWN) {
+					if (this.contradictionSearch(new Coordinate(x,y))) {
+						Action a = new Action(ACTION.UNCOVER, x, y);
+						this.moveQ.addLast(a);
+					}
+				}
+			}
+		}
+		if (!moveQ.isEmpty()) {
+			return moveQ.removeFirst();
+		}
 		
-		printAgentKnowledge();
+		// printAgentKnowledge();
 		return new Action(ACTION.LEAVE);
 	}
 	
-
-	
-	private void flagBombsFromCounts() {
-		/*
-		 * Update bombInfo based on boardInfo
+	private boolean contradictionSearch(Coordinate tile) {
+		/* Inputs:
+		 * 		x,y: starting point
+		 * 		maxDepth: maximum depth for recursion
+		 * 
+		 * Outputs:
+		 * 		false if search is inconclusive, true if (x,y) is a bomb.
+		 * 
+		 * Description:
+		 * Assume (x,y) is a bomb and attempts to derive contradiction.
+		 * If contradiction, then we proved (x,y) is not a bomb).
 		 */
-		
+		HashMap<String, Integer>[][] boardCopy = deepCopy(this.boardInfo);
+		// copy bomb info
+		BOMB_INFO[][] bombInfoCopy = new BOMB_INFO[this.bombInfo.length][this.bombInfo[0].length];
+		for (int i = 0; i < this.bombInfo.length; i++) {
+			for (int j = 0; j < this.bombInfo[0].length; j++) {
+				bombInfoCopy[i][j] = this.bombInfo[i][j];
+			}
+		}
+		// Assume (x,y) is a bomb (and flag it).
+		Action a = new Action(ACTION.FLAG, tile.x, tile.y);
+		this.doAction(a, boardCopy, bombInfoCopy);
+		return contradictionSearch(tile, boardCopy, bombInfoCopy);
+	}
+	
+	private boolean contradictionSearch(Coordinate tile, HashMap<String,Integer>[][] boardInfo, BOMB_INFO[][] bombInfo) {
 		/*
 		 * Pseudocode:
 		 * 
-		 * if tile[i][j].number == tile[i][j].coveredTiles:
-		 * 		mark all COVERED tiles as bombs if bomb status UNKOWN
+		 * flagBombs;
+		 * uncoverSafeTiles;
+		 * if contradiction:
+		 * 		return true;
+		 * else:
+		 * 		for nbr : neighbors of tile :
+		 * 			explored.add(tile)
+		 * 			backtrackSearch(nbr, boardInfo, bombInfo, depth-1, explored)
+		 * 
 		 */
-		for (int y = 0; y < this.boardInfo.length; y++) {
-			for (int x = 0; x < this.boardInfo[0].length; x++) {
-				HashMap<String, Integer> tile = this.boardInfo[y][x];
+		LinkedList<Coordinate> safeTiles = this.findSafeTilesFromCounts(boardInfo, bombInfo);
+		// System.out.println(safeTiles);
+		for (Coordinate t : safeTiles) {
+			boardInfo[t.y][t.x].put("number", -2);
+			Action a = new Action(ACTION.UNCOVER, t.x, t.y);
+			this.doAction(a, boardInfo, bombInfo);
+		}
+		
+		// System.out.println("######### Hypothetical Board ########");
+		// this.printInfo(boardInfo, bombInfo);
+		
+		return contradiction(boardInfo, bombInfo);
+	}
+	
+	private boolean contradiction(HashMap<String, Integer>[][] boardInfo, BOMB_INFO[][] bombInfo) {
+		/*
+		 * A contradiction occurs when, for a given (uncoverd) tile:
+		 * 		1) tile.number > tile.covered_neighbors or
+		 * 		2) tile.number < tile.bomb_neighbors
+		 * 
+		 * We only detect type 1 here.
+		 */
+		
+		for (int y = boardInfo.length-1; y >= 1; y--) {
+			for (int x = 1; x < boardInfo[0].length; x++) {
+				HashMap<String, Integer> tile = boardInfo[y][x];
+				if (tile.get("number") != -1 && tile.get("number") != -2) {
+					if (tile.get("number") > tile.get("covered_neighbors")) {
+						System.out.println("Contradiction at " + x + "," + y);
+						return true;
+					}	
+				}
+			}
+		}
+		return false;
+	}
+	
+	private HashMap<String, Integer>[][] deepCopy(HashMap<String, Integer>[][] boardInfo) {
+		@SuppressWarnings("unchecked")
+		HashMap<String, Integer>[][] boardCopy = new HashMap[boardInfo.length][boardInfo[0].length];
+		for (int i = 0; i < boardInfo.length; i++) {
+			for (int j = 0; j < boardInfo[0].length; j++) {
+				HashMap<String, Integer> tileCopy = new HashMap<String, Integer>();
+				HashMap<String, Integer> tile = this.boardInfo[i][j];
+				tileCopy.put("number", tile.get("number"));
+				tileCopy.put("bomb_neighbors", tile.get("bomb_neighbors"));
+				tileCopy.put("covered_neighbors", tile.get("covered_neighbors"));
+				
+				boardCopy[i][j] = tileCopy;
+			}
+		}		
+		return boardCopy;
+	}
+	
+	private LinkedList<Coordinate> findBombsFromCounts(HashMap<String, Integer>[][] boardInfo, BOMB_INFO[][] bombInfo) {
+		/* Finds (new) bombs from counts
+		 * 
+		 * Pseudocode:
+		 * 
+		 * if tile[i][j].number == tile[i][j].coveredTiles:
+		 * 		if bombInfo[i][j] == UNKNOWN
+		 * 			bombTile.append(tile[i][j])
+		 */
+		
+		LinkedList<Coordinate> newBombs = new LinkedList<Coordinate>();
+		for (int y = 0; y < boardInfo.length; y++) {
+			for (int x = 0; x < boardInfo[0].length; x++) {
+				HashMap<String, Integer> tile = boardInfo[y][x];
 				if (tile.get("number") == -1) {
 					continue;
 				}			
@@ -174,25 +279,48 @@ public class MyAI extends AI {
 					// Flag all covered neighbors. Mark them as bombs
 					for (Coordinate nb : allNeighbors) {
 						// Flag if bomb status unknown and still covered
-						if (this.boardInfo[nb.y][nb.x].get("number") == -1 && this.bombInfo[nb.y][nb.x] == BOMB_INFO.UNKNOWN) {
-							Action a = new Action(ACTION.FLAG, nb.x, nb.y);
-							if (!inBuffer(a)) {
-								this.moveQ.addLast(a);
-							}	
+						if (boardInfo[nb.y][nb.x].get("number") == -1 && bombInfo[nb.y][nb.x] == BOMB_INFO.UNKNOWN) {
+							newBombs.addLast(nb);	
 						}
 					}
 				}
 			}
 		}
+		return newBombs;
 	}
 	
-	private Action[] findSafeTilesFromCounts() {
+	private void flagBombsFromCounts(HashMap<String, Integer>[][] boardInfo, BOMB_INFO[][] bombInfo) {
+		LinkedList<Coordinate> newBombs = this.findBombsFromCounts(boardInfo, bombInfo);
+		for (Coordinate newBomb : newBombs) {
+			Action a = new Action(ACTION.FLAG, newBomb.x, newBomb.y);
+			if (!inBuffer(a)) {
+				this.moveQ.addLast(a);
+			}
+		}
+	}
+	
+	private void uncoverSafeTiles(HashMap<String, Integer>[][] boardInfo, BOMB_INFO[][] bombInfo) {
+		// Uncover the safe tiles (that are still covered)
+		// Add all covered neighbors to moveQ
+		LinkedList<Coordinate> safeTiles = this.findSafeTilesFromCounts(boardInfo, bombInfo);
+		for (Coordinate safeTile : safeTiles) {
+			if (boardInfo[safeTile.y][safeTile.x].get("number") == -1 && bombInfo[safeTile.y][safeTile.x] != BOMB_INFO.BOMB) {
+				Action a = new Action(ACTION.UNCOVER, safeTile.x, safeTile.y);
+				if (!inBuffer(a)) {
+					this.moveQ.addLast(a);
+				}
+			}
+		}
+	}
+	
+	private LinkedList<Coordinate> findSafeTilesFromCounts(HashMap<String, Integer>[][] boardInfo, BOMB_INFO[][] bombInfo) {
 		/*
-		 * 
+		 * Finds covered tiles that are safe to uncover.
 		 */
-		for (int y = 0; y < this.boardInfo.length; y++) {
-			for (int x = 0; x < this.boardInfo[0].length; x++) {
-				HashMap<String, Integer> tile = this.boardInfo[y][x];
+		LinkedList<Coordinate> safeTiles = new LinkedList<Coordinate>();
+		for (int y = 0; y < boardInfo.length; y++) {
+			for (int x = 0; x < boardInfo[0].length; x++) {
+				HashMap<String, Integer> tile = boardInfo[y][x];
 				if (tile.get("number") == -1) {
 					continue;
 				}
@@ -206,7 +334,7 @@ public class MyAI extends AI {
 				 * 		allNbrs = getAllNeighbors(i,j)
 				 * 		for nbr in allNbrs:
 				 * 			if nbr is covered and not bomb:
-				 * 				moveQ.append(nbr)
+				 * 				safeTiles.append(nbr)
 				 */
 				if (tile.get("number") == tile.get("bomb_neighbors")) {
 					LinkedList<Coordinate> allNeighbors = getAllNeighbors(x,y);
@@ -214,10 +342,9 @@ public class MyAI extends AI {
 					
 					// Add all covered neighbors to moveQ
 					for (Coordinate nb : allNeighbors) {
-						if (this.boardInfo[nb.y][nb.x].get("number") == -1 && this.bombInfo[nb.y][nb.x] != BOMB_INFO.BOMB) {
-							Action a = new Action(ACTION.UNCOVER, nb.x, nb.y);
-							if (!inBuffer(a)) {
-								this.moveQ.addLast(a);
+						if (boardInfo[nb.y][nb.x].get("number") == -1 && bombInfo[nb.y][nb.x] != BOMB_INFO.BOMB) {
+							if (!safeTiles.contains(nb)) {
+								safeTiles.addLast(nb);
 							}
 						}
 					}
@@ -225,7 +352,7 @@ public class MyAI extends AI {
 				
 			}
 		}
-		return null;
+		return safeTiles;
 	}
 	
 	private LinkedList<Coordinate> getAllNeighbors(int x, int y) {
@@ -263,7 +390,7 @@ public class MyAI extends AI {
 			while (j <= 1) {
 				// start at col x-1 and stop at row x+1
 				int x1 = x+j;
-				if (isInBounds(x1, y1) && this.boardInfo[y1][x1].get("number") == -1) {
+				if (isInBounds(x1, y1) && boardInfo[y1][x1].get("number") == -1) {
 					Action a = new Action(ACTION.UNCOVER, x1, y1);
 					// Check if action is already in the buffer
 					if (!inBuffer(a)) {
@@ -295,10 +422,6 @@ public class MyAI extends AI {
 	private void initBoardInfo() {
 		for (int y = this.boardInfo.length-1; y >= 0; y--) {
 			for (int x = 0; x < this.boardInfo[0].length; x++) {
-				
-				if (x == 1 && y == 6) {
-					System.out.println(this.getAllNeighbors(x, y));
-				}
 				HashMap<String, Integer> m = new HashMap<String, Integer>();
 				m.put("number", -1);
 				m.put("bomb_neighbors", 0);
@@ -319,12 +442,16 @@ public class MyAI extends AI {
 	
 	private void printAgentKnowledge() {
 		System.out.println("####### Agent's Knowledge ########");
+		this.printInfo(this.boardInfo, this.bombInfo);
+	}
+	
+	private void printInfo(HashMap<String, Integer>[][] boardInfo, BOMB_INFO[][] bombInfo) {
 		System.out.println("----- board coverage ------");
 		// Board Coverage
-		for (int y = this.boardInfo.length-1; y >= 1; y--) {
-			for (int x = 1; x < this.boardInfo[0].length; x++) {
-				HashMap<String, Integer> tile = this.boardInfo[y][x];
-				if (this.bombInfo[y][x] == BOMB_INFO.BOMB) {
+		for (int y = boardInfo.length-1; y >= 1; y--) {
+			for (int x = 1; x < boardInfo[0].length; x++) {
+				HashMap<String, Integer> tile = boardInfo[y][x];
+				if (bombInfo[y][x] == BOMB_INFO.BOMB) {
 					System.out.printf("%3s","F");
 				} else if (tile.get("number") == -1) {
 					System.out.printf("%3s",".");
@@ -337,17 +464,17 @@ public class MyAI extends AI {
 		// covered neighbors counts
 		System.out.println("----- covered_neighbors ------");
 		for (int y = this.boardInfo.length-1; y >= 1; y--) {
-			for (int x = 1; x < this.boardInfo[0].length; x++) {
-				HashMap<String, Integer> tile = this.boardInfo[y][x];
+			for (int x = 1; x < boardInfo[0].length; x++) {
+				HashMap<String, Integer> tile = boardInfo[y][x];
 				System.out.printf("%3d",tile.get("covered_neighbors"));
 			}
 			System.out.println();
 		}
 		// neighboring bombs found
 		System.out.println("----- bomb_neighbors ------");
-		for (int y = this.boardInfo.length-1; y >= 1; y--) {
-			for (int x = 1; x < this.boardInfo[0].length; x++) {
-				HashMap<String, Integer> tile = this.boardInfo[y][x];
+		for (int y = boardInfo.length-1; y >= 1; y--) {
+			for (int x = 1; x < boardInfo[0].length; x++) {
+				HashMap<String, Integer> tile = boardInfo[y][x];
 				System.out.printf("%3d",tile.get("bomb_neighbors"));
 			}
 			System.out.println();

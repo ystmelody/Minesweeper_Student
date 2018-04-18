@@ -13,9 +13,9 @@ import src.Action.ACTION;
 public class World {
 	
 	// Defaults
-	static final int DEFAULT_COLS = 9;
-	static final int DEFAULT_ROWS = 9;
-	static final int DEFAULT_MINES = 10;
+	static final int DEFAULT_COLS = 14;
+	static final int DEFAULT_ROWS = 10;
+	static final int DEFAULT_MINES = 25;
 	
 	// Game Constants
 	static final int WIN_BONUS = 100;
@@ -226,7 +226,7 @@ public class World {
 	public World(String filename, String aiType, boolean debug) throws Exception {
 		BufferedReader in;
 		TwoTuple mv;
-		int stX, stY, stRow, stCol;
+		int stRow, stCol;
 		
 		this.debug = debug;
 		
@@ -245,13 +245,13 @@ public class World {
 			addMines(in);
 			
 		} else {
-			// Create a default world - 9x9, 10 mines, random start tile
+			// Create a default world
 			this.colDimension = DEFAULT_COLS;
 			this.rowDimension = DEFAULT_ROWS;
-			this.totalMines = this.flagsLeft = DEFAULT_MINES;
 			TwoTuple firstMv = getFirstMove();
 			this.startX = firstMv.x;
 			this.startY = firstMv.y;
+			System.out.print(firstMv.x);
 			createRandomBoard(this.startX,this.startY);
 		}
 		
@@ -334,17 +334,17 @@ public class World {
 		 *  x,y coordinates are 1-indexed. That is,
 		 *  	1 <= x <= colDimension & 1 <= y <= rowDimension
 		 */
+		this.board = new Tile[DEFAULT_ROWS][DEFAULT_COLS];
 		TwoTuple rowCol = this.translateCoordinate(stX, stY);
 		int stRow = rowCol.x;
 		int stCol = rowCol.y;
-		this.board = new Tile[this.rowDimension][this.colDimension];
 		this.initEmptyBoard();
 		
 		// Add Mines
-		int i = this.totalMines;
+		int i = DEFAULT_MINES;
 		while (i > 0) {
-			int r = (int) (Math.random() * this.colDimension);
-			int c = (int) (Math.random() * this.rowDimension);
+			int r = (int) (Math.random() * this.rowDimension);
+			int c = (int) (Math.random() * this.colDimension);
 			// Do not place mine adjacent to starting tile
 			if (Math.abs(r-stRow) > 1 || Math.abs(c-stCol) > 1) {
 				// place only if there isn't already a mine
@@ -537,7 +537,7 @@ public class World {
 		 * 	The internal representation of a board is a 2-d array, 0-indexed 
 		 * 	array. However, users, specify locations on the board using 1-indexed
 		 * 	(x,y) Cartesian coordinates. 
-		 * 	Hence, to access the proper indicies the the board array, a translation 
+		 * 	Hence, to access the proper indicies into the board array, a translation 
 		 * 	must be performed first.
 		 */
 		int row = this.rowDimension-y;
@@ -554,9 +554,9 @@ public class World {
 	}
 	
 	public void printBoardInfo() {
-		String yAxisWidth = "4";
-		String xLeftOffset = "1";
-		String xElementSpacing = "2";
+		int yAxisWidth = 4;
+		int xLeftOffset = 1;
+		int xElementSpacing = 3;
 		System.out.println("\n---------------- Game Board ------------------");
 		System.out.println();
 		for (int i = 0; i < this.rowDimension; i++) {
@@ -583,7 +583,10 @@ public class World {
 		System.out.printf("%"+xLeftOffset+"s", "");
 		for (int i = 1; i < this.colDimension+1; i++) {
 			System.out.print(i);
-			System.out.printf("%-"+xElementSpacing+"s", "");
+			if (i < 10)
+				System.out.printf("%-"+xElementSpacing+"s", "");
+			else
+				System.out.printf("%-"+(xElementSpacing-1)+"s", "");
 		}
 		System.out.println();
 	}
@@ -612,9 +615,9 @@ public class World {
 		System.out.print("Flags Left: " + this.flagsLeft + "   ");
 
 		// DELETE THIS
-		System.out.print("Correct Flags: " + this.correctFlags + "   ");
-		int incorrectFlags = this.totalMines - this.flagsLeft - this.correctFlags;
-		System.out.print("Incorrect Flags: " + incorrectFlags + "   ");
+		//System.out.print("Correct Flags: " + this.correctFlags + "   ");
+		//int incorrectFlags = this.totalMines - this.flagsLeft - this.correctFlags;
+		//System.out.print("Incorrect Flags: " + incorrectFlags + "   ");
 
 		if (lastAction != null) {
 			System.out.print("Last Action: " + lastAction);
@@ -622,25 +625,6 @@ public class World {
 		System.out.println();
 		System.out.println();
 	}
-	
-//	private void printAgentInfo() {
-//		if (this.agent instanceof ManualAI) {
-//			System.out.println("------------------ Percepts ------------------ ");
-//			System.out.print("Tiles Covered: " + this.coveredTiles + "   ");
-//			System.out.print("Flags Left: " + this.flagsLeft + "   ");
-//			
-//			System.out.print("Correct Flags: " + this.correctFlags + "   ");
-//			int incorrectFlags = this.totalMines - this.flagsLeft - this.correctFlags;
-//			System.out.print("Incorrect Flags: " + incorrectFlags + "   ");
-//			
-//			if (this.perceptNumber >= 0) {
-//				// System.out.print("Last Action: ");
-//				// System.out.print("Last uncovered Tile (number): " + this.lastUncoveredTile.number);
-//			}
-//			System.out.println();
-//			System.out.println();
-//		}
-//	}
 	
 	private void printActionInfo() {
 		System.out.println("---------------- Available Actions ----------------");

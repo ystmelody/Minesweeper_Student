@@ -67,6 +67,11 @@ public class Main {
         	debug_mode = true;
         }
         
+        // DELETE THIS (for deugging only)
+        aiType = "myai";
+        debug_mode = true;
+        filename = null;//"./worlds/world4x4_1.txt";
+        
 		// Create the world
 		if (filename != null) {
 			world = new World(filename, aiType, debug_mode);

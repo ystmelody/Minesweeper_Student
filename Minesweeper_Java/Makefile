@@ -1,5 +1,5 @@
 compile:
-	javac -classpath ".:jars/*" src/*.java
+	javac -classpath ".:jars/*" -Xlint:unchecked src/*.java
 
 clean:
 	rm -rf src/*.class

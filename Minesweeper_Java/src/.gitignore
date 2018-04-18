@@ -18,3 +18,7 @@
 /Action$ACTION.class
 /MyAI.class
 /RandomAI.class
+/MyAI$Coord.class
+/MyAI$BOMB.class
+/MyAI$BOMB_INFO.class
+/MyAI$Coordinate.class
